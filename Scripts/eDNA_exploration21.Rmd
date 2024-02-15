@@ -1,0 +1,1517 @@
+---
+title: "eDNA_exploration_2021"
+author: "Lia Domke"
+date: "3/24/2022"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+We collected  nearshore samples from southern Southeast Alaska and amplified the samples using MiFish primer (12S) and quantified using MiSeq Illumina 
+
+Goals for this script is to explore the read data - maybe represent it as species proportions by site (although we know that this raw data is not correct in terms of proportions so maybe we skip that). 
+
+After exploring species read counds by sites, maybe look at community composition (using presence and absence)
+
+Finally lets compare the species occurences between seine data and eDNA by site
+
+libraries
+```{r message=FALSE, warning=FALSE}
+library(plyr)
+library(dplyr)
+library(tidyverse)
+library(vegan)
+library(glue)
+library(ggrepel)
+
+```
+
+```{r theme settings, include=FALSE}
+# Creates custom base plot theme that can adjust every graph that you use plot_theme for!
+
+plot_theme <- function() {
+  theme_bw(base_size = 14, base_family = "Avenir") %+replace%
+    theme(panel.background  = element_blank(),
+            plot.background = element_rect(fill="white", colour=NA), 
+            legend.background = element_rect(fill="transparent", colour=NA),
+            legend.key = element_rect(fill="transparent", colour=NA),
+            panel.grid.major = element_blank(), 
+            panel.grid.minor = element_blank(),
+            strip.background = element_rect(colour = "NA", fill = "grey96"))
+}
+
+# to use ggsave and export plots include argument 'device=cario_pdf' e.g.: 
+# ggsave("name.pdf", device=cairo_pdf, width = 6, height = 6)
+```
+
+```{r fig labeling, include = FALSE}
+# A function for captioning and referencing images
+fig <- local({
+    i <- 0
+    ref <- list()
+    list(
+        cap=function(refName, text) {
+            i <<- i + 1
+            ref[[refName]] <<- i
+            paste("Figure ", i, ": ", text, sep="")
+        },
+        ref=function(refName) {
+            ref[[refName]]
+        })
+})
+```
+
+# Read in data
+```{r}
+edna <- read.csv("/Users/liadomke/Desktop/Grad School/UAF/Data/Chp3_SeascapeDynamics/Data/eDNA_tax_filtered_3-24-22.csv")
+loc <- read.csv("/Users/liadomke/Desktop/Grad School/UAF/Data/Chp3_SeascapeDynamics/Data/chp3_sites.csv")
+seine <- read.csv("/Users/liadomke/Desktop/Grad School/UAF/Data/Chp3_SeascapeDynamics/Data/fish_beach_seine_2021_1-5-21.csv")
+
+edna.minus.control <- read.csv("/Users/liadomke/Desktop/Grad School/UAF/Data/Chp3_SeascapeDynamics/Data/eDNA_tax_filtered_minus_controls_4-15-22.csv", stringsAsFactors = FALSE, header = TRUE)
+```
+
+visualize eDNA reads
+```{r}
+glimpse(edna)
+
+unique(edna$taxon)
+```
+
+remove any sample ID that are not part of my sampling in SESO
+```{r echo=TRUE}
+edna.red <- edna %>%
+  filter(sample != "e00005" & sample != "e00007" & sample != "e00010" & sample != "e00011" &
+          sample != "e00012" & sample != "e00013" & sample != "e00014" & sample != "e00015" &
+          sample != "e00016" & sample != "e00017") %>%
+  select(-X)
+  
+edna.red$binary <- ifelse(edna.red$count > 0, 1, 0)
+```
+
+add in habitat information
+```{r, all.sites, echo = FALSE, fig.width=12, fig.height = 6}
+ggplot(edna.red) +
+  geom_col(mapping = aes(x = sample, y = count, fill = taxon)) + plot_theme()
+```
+
+Divide by habitat type
+```{r}
+sites <- c("Sylburn harbor eel",  "Sylburn harbor kelp", "Reef harbor eel", "Reef harbor kelp", "Kah shakes eel", "Kah shakes kelp", "Dall bay eel", "Dall bay kelp",     
+"Moira sound eel", "Moira sound kelp", "Nichols bay eel", "Nichols bay kelp", "Tah bay eel", "Hunter bay eel", "Klawock airport eel", "Big Tree bay eel", "Clam island mixed", "Cole island mixed", "Bostwick inlet eel", "Bostwick inlet kelp")
+
+habitat <- c("eelgrass", "kelp", "eelgrass", "kelp",
+             "eelgrass", "kelp", "eelgrass", "kelp",
+             "eelgrass", "kelp", "eelgrass", "kelp",
+             "mixed eelgrass", "eelgrass", "eelgrass",
+             "eelgrass", "mixed eelgrass", 
+             "mixed eelgrass", "eelgrass", "kelp")
+
+bay_id <- c("SYLB_A", "SYLB_B", "REEF_A", "REEF_B", "KAHS_A", "KAHS_B", "DALL_A", "DALL_B", 
+            "MOIR_A", "MOIR_B", "NICH_A", "NICH_B", "TAHB_A", "HUNT_A", "KLWA_A", "BTRB_A", 
+            "CLAM_A", "NFEI_B", "BOST_A", "BOST_B")
+
+chp3 <- data.frame(sites, habitat)
+
+edna.red.hab <- left_join(chp3, edna.red, by = c("sites" = "Sample_label"))
+
+# change to P/A 
+# sppAbun[sppAbun > 0] <- 1 #converts from abundance to P/A
+# sppAbun
+```
+
+If we're interested in accounting for the field controls - subtract the controls by site, from the ASVs collected, this was done in the script "taxonomic_filtering_eDNA2021.Rmd"
+
+# Field controls removed
+
+```{r}
+glimpse(edna.minus.control)
+
+# add in habitat data, like above
+edna.nocontrol.hab <- left_join(chp3, edna.minus.control, by = c("sites" = "Sample_label")) %>%
+  dplyr::select(-X)
+ 
+# rotate the dataframe to wide (like below) and create a binary column
+edna.nocontrol.hab$binary <- ifelse(edna.nocontrol.hab$counts_minus_controls > 0, 1, 0)
+
+# binary wide
+minuscontrol.wide.bin <- edna.nocontrol.hab %>%
+  pivot_wider(id_cols = -c(taxonomic_level, counts_minus_controls), names_from = "taxon", values_from = "binary", values_fill = 0) %>%
+  distinct()
+
+# make the binary long again better for plotting
+minuscontrol.long.bin <- minuscontrol.wide.bin %>%
+  pivot_longer(cols = Pholis:Agonidae, names_to = "taxon", values_to = "binary")
+
+# count-based wide then long
+minuscontrol.wide.counts <- edna.nocontrol.hab %>%
+  pivot_wider(id_cols = -c(taxonomic_level, binary), names_from = "taxon", values_from = "counts_minus_controls", values_fill = 0) %>%
+  distinct()
+
+minuscontrol.long.counts <- minuscontrol.wide.counts %>%
+  pivot_longer(cols = Pholis:Agonidae, names_to = "taxon", values_to = "counts_minus_controls")
+```
+
+# Includes field controls
+rotate data frame to wide for dataframe that still includes the control information
+```{r}
+edna.wide <- edna.red.hab %>%
+  pivot_wider(id_cols = -c(taxonomic_level, binary), names_from = "taxon", values_from = "count", values_fill = 0) %>%
+  distinct()
+
+edna.bin.wide <- edna.red.hab %>%
+  pivot_wider(id_cols = -c(taxonomic_level, count), names_from = "taxon", values_from = "binary",
+                             values_fill = 0) %>%
+  distinct()
+
+# take the binary wide dataframe and make it long again for plotting
+edna.hab.long <- pivot_longer(edna.bin.wide, cols = Pholis:Agonidae, names_to = "taxon", values_to = "binary")
+```
+
+
+# 1. Visualize by habitat
+## eelgrass by sample rep and field rep
+The graphs below show the detection (and ASV count) across the 10 eelgrass sites (at 8 of these sites we have seine data). Each field and technical replicate is presented as different bars. Field replicate is represented by the number (1,2,3 or control) and each technical replciate (done in triplicate) is represented by letters (A,B,C). 
+```{r, by.eel, echo = FALSE, fig.width= 12, fig.height = 7, fig.cap=fig$cap("by.eel", "Detection and count of taxon across the eelgrass sites where we have eDNA data and includes controls")}
+p1 <- edna.red.hab %>%
+  filter(habitat == "eelgrass") %>%
+  unite(field_tech_rep, c(Sample_rep,rep)) %>%
+  ggplot() +
+  geom_col(aes(x = field_tech_rep, y = count, fill = taxon)) + plot_theme() +
+  theme(axis.text.x = element_text(angle = 45))
+p1 + facet_wrap(~sites)
+```
+
+
+
+The graphs above indicate relative consistency species occurrence (presence) across the technical replicates and even the field replicates. However, there are a few confusing exceptions. 
+In particular Sylburn harbor eelgrass has extremely low species occurence. Samples 1 - A is composed of Oncorhynchus and Pholis, sample 1- B is Cymatogaster_aggregata, Oncorhynchus, 1-C has oncorhnynchus, and Clupeidae. 
+Sample 2 ABC has nearly nothing with A only having Citharichthys_stigmaeus, Ammodytidae, Oligocottus, and Oncorhynchus
+Sample 3 ABC added hexagrammous to the mix of species present (with others)
+
+Besides Sylburn harbour eel, the rest of the sites look decide. Some variability in what is present in the controls for each site. Most have very few counts or none in the field control and technical triplicates. However this is not the case for Kah shakes and Reef harbor eel. 
+
+*Questions* 
+
+- How should we account for the control? Do we subtract the control species from the the presence/absence in the field replicates? 
+Do we substract the ASV read counts of the control from each field sample? <- doing this may be a bad idea because if there was little genetic material in the control and lots of PCR material (nucleotides etc) then it would artificially make the ASV counts of the genetic material there greater than if it was present in a sample with lots of genetic material. 
+
+- How do we deal with the technical triplicates? Previously (w/ Ole) we talked about using them to express the stochasity of the data. How do we express a confidence interval w/ presence/absence data? 
+
+## understory kelp by field and technical replicates
+ASV counts of species present at sites. Includes both the field and technical replicates
+```{r, by.kelp, echo = FALSE, fig.width= 18, fig.height = 7, fig.cap=fig$cap("by.kelp", "Detection and count of taxon across the understory kelp sites where we have eDNA data and includes controls")}
+p2 <- edna.red.hab %>%
+  filter(habitat == "kelp") %>%
+  unite(field_tech_rep, c(Sample_rep,rep)) %>%
+  ggplot() +
+  geom_col(aes(x = field_tech_rep, y = count, fill = taxon)) + plot_theme() +
+  theme(axis.text.x = element_text(angle = 45))
+p2 + facet_wrap(~sites)
+```
+
+These graphs are similar to the eelgrass sites. In this case the sites that have questionable results are: moira sound kelp - with very few ASV counts across the replicates, Nichols bay kelp - almost no species present in the 3rd field replicate, Sylburn harbor klep - with not very consistent results across the field replicates and various species present in the control samples. 
+
+Lets look at what these sites look like when graphed with the ASV summed across the technical replicates
+
+# eelgrass combined tech replicates
+```{r, by.eel.sum, echo = FALSE, fig.width= 14, fig.height = 7, fig.cap=fig$cap("by.eel.sum", "Detection and count of taxon across the eelgrass sites where we have eDNA data and includes controls. This sums across technical replicates")}
+p1 <- edna.red.hab %>%
+  filter(habitat == "eelgrass") %>%
+  ggplot() +
+  geom_col(aes(x = Sample_rep, y = count, fill = taxon)) +
+  theme(axis.text.x = element_text(angle = 45)) + plot_theme()
+p1 + facet_wrap(~sites)
+
+```
+
+## P/A Heatmap
+If we look at this in P/A heatmap style
+```{r, by.eel.h, echo = FALSE, fig.width= 14, fig.height = 7, fig.cap=fig$cap("by.eel.h", "Heat map of the presence/absence of taxon present in eelgrass meadows.")}
+h1 <- edna.hab.long %>%
+  filter(habitat == "eelgrass") %>%
+  ggplot() +
+  geom_tile(aes(x = Sample_rep, y = taxon, fill = as.factor(binary))) +
+  theme(axis.text.x = element_text(angle = 45)) +
+  scale_fill_grey(start = 1, end = 0) + plot_theme()
+
+h1 + facet_wrap(~sites)
+```
+
+This isn't that helpful especially since the taxon are hard to read, we need to do a couple things :
+- combine species that are in the same group (so Oncorhynchus should be combined with species specific instances of Oncorhynchus)
+
+- combine across replicates
+
+```{r}
+unique(edna.hab.long$taxon)
+edna.hab.long$taxon <- as.factor(edna.hab.long$taxon)
+
+levels(edna.hab.long$taxon)[levels(edna.hab.long$taxon)=="Oncorhynchus_kisutch"] <- "Oncorhynchus"
+levels(edna.hab.long$taxon)[levels(edna.hab.long$taxon)=="Hexagrammos_decagrammus"] <- "Hexagrammos"
+levels(edna.hab.long$taxon)[levels(edna.hab.long$taxon)=="Gasterosteus_aculeatus"] <- "Gasterosteus"
+levels(edna.hab.long$taxon)[levels(edna.hab.long$taxon)=="Oncorhynchus_tshawytscha"] <- "Oncorhynchus"
+# Oligocottus genus of sculpins
+# Cottidae family of sculpins
+# Anoplarchus genus of cockscombs
+# Stichaeidae family of pricklebacks
+# Apodichthys_flavidus penpoint gunnel
+# Actinopteri - class of ray finned fishes general
+# Polypera_greeni Lopefine snailfish
+# Hemilepidotus - genus of sclupins (irish lords)
+# Pleuronectidae family of right eye flounders
+  # Pleuronectidae is a genus within this family 
+# Gobiesox_maeandricus - northern clingfish
+# Oxylebius_pictus painted greenling
+# Nautichthys_oculofasciatus - sailfin sculpin
+# Ophiodon_elongatus lingcod
+
+# filter out canis_lupus, homo_sapiens, megapstera_novaeangliae, enhydra_lutris, Genus Sus (domestic pig), Genus Bos (beef),
+# Genus Ovis (lamb)
+edna.fish.long <- edna.hab.long %>%
+  filter(taxon != "Canis_lupus" & taxon != "Homo_sapiens" & taxon != "Megaptera_novaeangliae" &
+           taxon != "Enhydra_lutris" & taxon != "Sus" & taxon != "Bos" & taxon != "Ovis")
+
+unique(edna.fish.long$taxon) # now 51 unique occurrences
+edna.fish.long$taxon <- as.character(edna.fish.long$taxon)
+
+# need to combine the presence/absence with the renaming of the levels of taxon
+edna.fish.long <- distinct(edna.fish.long)
+```
+
+## reduced species in eelgrass
+```{r}
+# this includes the control in the counts so its not right, need to remove the control, then summarize, add control back in, and graph
+# remove control binary and taxon at sites
+control.eel <- edna.fish.long %>%
+  filter(habitat == "eelgrass" & Sample_rep == "control") %>%
+  distinct()
+
+# creates list of fish species without any occurrences
+no.occ.eel <- edna.fish.long %>%
+  filter(habitat == "eelgrass" & Sample_rep != "control") %>%
+  group_by(taxon) %>%
+  dplyr::summarise(occurrence = sum(binary)) %>%
+  subset(occurrence == "0") %>%
+  dplyr::select(-occurrence)
+
+#no.occ.eel <- as.vector(no.occ$taxon)
+```
+
+```{r, by.eel.h2, echo = FALSE, fig.width= 10, fig.height = 7, fig.cap=fig$cap("by.eel.h2", "Heat map of the presence/absence of taxon present in eelgrass meadows with field and technical replicates together and excluding controls")}
+# summarize data with the field and techn rep together and without controls
+h2 <- edna.fish.long %>%
+  filter(habitat == "eelgrass" & Sample_rep != "control") %>%
+  anti_join(no.occ.eel, by = "taxon") %>%
+  group_by(sites, taxon) %>%
+  dplyr::summarise(occurence = sum(binary)) %>% # this summarizes by site replicate and technical replicate (min = 0, max = 12)
+  ggplot() +
+  geom_tile(aes(x = sites, y = reorder(taxon, -occurence), fill = as.factor(occurence))) +
+  plot_theme() +
+  theme(axis.text.x = element_text(angle = 45)) +
+  scale_fill_grey(start = 1, end = 0) 
+
+h2 #+ facet_wrap(~sites)
+```
+Looking at this graph, what is the most useful about it? This doesn't subtract out the field controls. Based on some conversations with Pat Berry we can try and subtract the ASVs counts in the control from (each? I think) each field sample. This should be done on the basis of the ASV - not the species identification. 
+
+This graph is a combination of the field and lab replicates. 
+I think about the lab replicates as an expression of the stochasicity present in each field replicate -- so in my ideal world I would express each field replicate individually plus or minus some certainty. However, since this data is binary this doesn't make sense. Instead maybe re-graph each field replicate with occurrence (0-3) based on the lab replciates
+
+# understory kelp combined tech replicates
+## reduced species in kelp heatmap
+```{r}
+# this includes the control in the counts so its not right, need to remove the control, then summarize, add control back in, and graph
+# remove control binary and taxon at sites
+control.kelp <- edna.fish.long %>%
+  filter(habitat == "kelp" & Sample_rep == "control") %>%
+  distinct()
+
+# creates list of fish species without any occurrences
+no.occ.kelp <- edna.fish.long %>%
+  filter(habitat == "kelp" & Sample_rep != "control") %>%
+  group_by(taxon) %>%
+  dplyr::summarise(occurrence = sum(binary)) %>%
+  subset(occurrence == "0") %>%
+  dplyr::select(-occurrence)
+```
+
+```{r, by.kelp.h3, echo = FALSE, fig.width= 10, fig.height = 7, fig.cap=fig$cap("by.kelp.h3", "Heat map of the presence/absence of taxon present in understory kelp with field and technical replciates together and excluding controls.")}
+# summarize data with the field and techn rep together and without controls
+h3 <- edna.fish.long %>%
+  filter(habitat == "kelp" & Sample_rep != "control") %>%
+  anti_join(no.occ.kelp, by = "taxon") %>%
+  group_by(sites, taxon) %>%
+  dplyr::summarise(occurence = sum(binary)) %>% # this summarizes by site replicate and technical replicate (min = 0, max = 12)
+  ggplot() +
+  geom_tile(aes(x = sites, y = reorder(taxon, -occurence), fill = as.factor(occurence))) +
+  plot_theme() +
+  theme(axis.text.x = element_text(angle = 45)) +
+  scale_fill_grey(start = 1, end = 0) 
+
+h3 #+ facet_wrap(~sites)
+```
+
+### explanation of some of the species or species group present in the graphs above
+- Oligocottus genus of sculpins
+
+- Cottidae family of sculpins
+
+- Anoplarchus genus of cockscombs
+
+- Stichaeidae family of pricklebacks
+
+- Apodichthys_flavidus penpoint gunnel
+
+- Actinopteri - class of ray finned fishes general
+
+- Polypera_greeni Lopefine snailfish
+
+- Hemilepidotus - genus of sclupins (irish lords)
+
+- Pleuronectidae family of right eye flounders
+
+-  Pleuronectidae is a genus within this family 
+
+- Gobiesox_maeandricus - northern clingfish
+
+- Oxylebius_pictus painted greenling
+
+- Nautichthys_oculofasciatus - sailfin sculpin
+
+- Ophiodon_elongatus lingcod
+ 
+# Accounting for field controls
+ 
+ In the taxonomic filtering edna 2021 RMD script, I subtracted the counts in the controls (summed across lab replicates) from each field replicate
+ 
+ **This does not include the negative and positive controls (or even the DNA extraction controls)**
+```{r}
+# data without the control 
+glimpse(minuscontrol.long.counts)
+glimpse(minuscontrol.long.bin)
+```
+
+Lets graph by habitat types and summed ASV counts by species
+## eelgrass by field_tech reps
+```{r}
+minuscontrol.long.counts <- minuscontrol.long.counts %>%
+  separate(sample.PCR, into = c("sample.PCR", "rep"), sep = "-", remove = FALSE) %>%
+  unite(sample.PCR, sample.PCR:rep, sep = "-", remove = FALSE) # for wahtever reason you have to put it back together to keep column
+# repeat with binary
+minuscontrol.long.bin <- minuscontrol.long.bin %>%
+  separate(sample.PCR, into = c("sample.PCR", "rep"), sep = "-", remove = FALSE) %>%
+  unite(sample.PCR, sample.PCR:rep, sep = "-", remove = FALSE) # for wahtever reason you have to put it back together to keep column
+```
+```{r, by.eel.e, echo = FALSE, fig.width= 14, fig.height = 5, fig.cap=fig$cap("by.eel.e", "Heat map of the presence/absence of taxon present in eelgrass meadows after subtracting the ASV counts present in the controls")}
+e1 <- minuscontrol.long.counts %>%
+  filter(habitat == "eelgrass") %>%
+  unite(field_tech_rep, c(Sample_rep,rep)) %>%
+  ggplot() +
+  geom_col(aes(x = field_tech_rep, y = counts_minus_controls, fill = taxon)) +
+  theme(axis.text.x = element_text(angle = 45)) + plot_theme()
+e1 + facet_wrap(~sites)
+```
+
+## kelp by field_tech reps
+```{r, by.kelp.e, echo = FALSE, fig.width= 14, fig.height = 5, fig.cap=fig$cap("by.kelp.e", "Heat map of the presence/absence of taxon present in understory kelp after subtracting the ASV counts present in the controls")}
+e2 <- minuscontrol.long.counts %>%
+  filter(habitat == "kelp") %>%
+  unite(field_tech_rep, c(Sample_rep,rep)) %>%
+  ggplot() +
+  geom_col(aes(x = field_tech_rep, y = counts_minus_controls, fill = taxon)) +
+  theme(axis.text.x = element_text(angle = 45)) + plot_theme()
+e2 + facet_wrap(~sites)
+```
+
+# Reduce/combine species
+Combine the salmon species because we know the primer doesn't do a great job of seperating them
+This will be for the heat maps with p/a
+```{r}
+unique(minuscontrol.long.bin$taxon)
+minuscontrol.long.bin$taxon <- as.factor(minuscontrol.long.bin$taxon)
+
+levels(minuscontrol.long.bin$taxon)[levels(minuscontrol.long.bin$taxon)=="Oncorhynchus_kisutch"] <- "Oncorhynchus"
+levels(minuscontrol.long.bin$taxon)[levels(minuscontrol.long.bin$taxon)=="Hexagrammos_decagrammus"] <- "Hexagrammos"
+levels(minuscontrol.long.bin$taxon)[levels(minuscontrol.long.bin$taxon)=="Gasterosteus_aculeatus"] <- "Gasterosteus"
+levels(minuscontrol.long.bin$taxon)[levels(minuscontrol.long.bin$taxon)=="Oncorhynchus_tshawytscha"] <- "Oncorhynchus"
+# Oligocottus genus of sculpins
+# Cottidae family of sculpins
+# Anoplarchus genus of cockscombs
+# Stichaeidae family of pricklebacks
+# Apodichthys_flavidus penpoint gunnel
+# Actinopteri - class of ray finned fishes general
+# Polypera_greeni Lopefine snailfish
+# Hemilepidotus - genus of sclupins (irish lords)
+# Pleuronectidae family of right eye flounders
+  # Pleuronectidae is a genus within this family 
+# Gobiesox_maeandricus - northern clingfish
+# Oxylebius_pictus painted greenling
+# Nautichthys_oculofasciatus - sailfin sculpin
+# Ophiodon_elongatus lingcod
+
+# filter out canis_lupus, homo_sapiens, megapstera_novaeangliae, enhydra_lutris, Genus Sus (domestic pig), Genus Bos (beef),
+# Genus Ovis (lamb)
+edna.fish.long.bin <- minuscontrol.long.bin %>%
+  filter(taxon != "Canis_lupus" & taxon != "Homo_sapiens" &
+            taxon != "Sus" & taxon != "Bos" & taxon != "Ovis")
+
+unique(edna.fish.long.bin$taxon) # now 46 unique occurrences
+edna.fish.long.bin$taxon <- as.character(edna.fish.long.bin$taxon)
+
+# need to combine the presence/absence with the renaming of the levels of taxon
+edna.fish.long.bin <- distinct(edna.fish.long.bin)
+```
+
+## Reduced species in eelgrass (subtracted control)
+```{r}
+# creates list of fish species without any occurrences
+no.occ.eel2 <- edna.fish.long.bin %>%
+  filter(habitat == "eelgrass" & Sample_rep != "control") %>%
+  group_by(taxon) %>%
+  dplyr::summarise(occurrence = sum(binary)) %>%
+  subset(occurrence == "0") %>%
+  dplyr::select(-occurrence)
+
+# which ones are excluded?
+no.occ.eel2
+```
+
+```{r, by.eel.hc, echo = FALSE, fig.width= 10, fig.height = 7, fig.cap=fig$cap("by.eel.hc", "Heat map of the presence/absence of taxon present in eelgrass meadows after subtracting the ASV counts present in the controls and reducing/combining similar or unrealiby primed species")}
+# summarize data with the field and techn rep together and without controls
+hc <- edna.fish.long.bin %>%
+  filter(habitat == "eelgrass" & Sample_rep != "control") %>%
+  anti_join(no.occ.eel2, by = "taxon") %>%
+  group_by(sites, taxon) %>%
+  dplyr::summarise(occurence = sum(binary)) %>% # this summarizes by site replicate and technical replicate (min = 0, max = 9)
+  ggplot() +
+  geom_tile(aes(x = sites, y = reorder(taxon, -occurence), fill = as.factor(occurence))) +
+  plot_theme() +
+  theme(axis.text.x = element_text(angle = 45)) +
+  scale_fill_grey(start = 1, end = 0)
+
+hc #+ facet_wrap(~sites)
+```
+
+## reduced species in kelp (subtracted control)
+```{r}
+# creates list of fish species without any occurrences
+no.occ.kelp2 <- edna.fish.long.bin %>%
+  filter(habitat == "kelp" & Sample_rep != "control") %>%
+  group_by(taxon) %>%
+  dplyr::summarise(occurrence = sum(binary)) %>%
+  subset(occurrence == "0") %>%
+  dplyr::select(-occurrence)
+
+# which ones are excluded?
+no.occ.kelp2
+```
+
+```{r, by.kelp.hc2, echo = FALSE, fig.width= 10, fig.height = 7, fig.cap=fig$cap("by.kelp.hc2", "Heat map of the presence/absence of taxon present in understory kelp after subtracting the ASV counts present in the controls and reducing/combining similar or unrealiby primed species")}
+# summarize data with the field and techn rep together and without controls
+hc2 <- edna.fish.long.bin %>%
+  filter(habitat == "kelp" & Sample_rep != "control") %>%
+  anti_join(no.occ.kelp2, by = "taxon") %>%
+  group_by(sites, taxon) %>%
+  dplyr::summarise(occurence = sum(binary)) %>% # this summarizes by site replicate and technical replicate (min = 0, max = 9)
+  ggplot() +
+  geom_tile(aes(x = sites, y = reorder(taxon, -occurence), fill = as.factor(occurence))) +
+  plot_theme() +
+  theme(axis.text.x = element_text(angle = 45)) +
+  scale_fill_grey(start = 1, end = 0)
+
+hc2 #+ facet_wrap(~sites)
+```
+
+## compare the mixed versus eelgrass habitat
+```{r}
+unique(edna.fish.long.bin$habitat)
+
+no.occ.eel3 <- edna.fish.long.bin %>%
+  filter(sites == "Big Tree bay eel" | sites == "Clam island mixed" | sites == "Cole island mixed" |
+         sites == "Hunter bay eel" | sites == "Klawock airport eel" | sites == "Tah bay eel" & Sample_rep != "control") %>%
+  group_by(taxon) %>%
+  dplyr::summarise(occurrence = sum(binary)) %>%
+  subset(occurrence == "0") %>%
+  dplyr::select(-occurrence)
+
+# which ones are excluded?
+no.occ.eel3
+```
+```{r, by.mixed, echo = FALSE, fig.width= 10, fig.height = 7, fig.cap=fig$cap("by.mixed", "Heat map of the presence/absence of taxon present in eelgrass or mixed eelgrass habitats after subtracting the ASV counts present in the controls and reducing/combining similar or unrealiby primed species")}
+# summarize data with the field and techn rep together and without controls
+hmixed <- edna.fish.long.bin %>%
+  filter(sites == "Big Tree bay eel" | sites == "Clam island mixed" | sites == "Cole island mixed" |
+         sites == "Hunter bay eel" | sites == "Klawock airport eel" | sites == "Tah bay eel" & Sample_rep != "control") %>%
+  anti_join(no.occ.eel3, by = "taxon") %>%
+  group_by(sites, taxon) %>%
+  dplyr::summarise(occurence = sum(binary)) %>% # this summarizes by site replicate and technical replicate (min = 0, max = 9)
+  ggplot() +
+  geom_tile(aes(x = factor(sites, level = c("Clam island mixed", "Cole island mixed", "Tah bay eel", 
+                                            "Big Tree bay eel", "Klawock airport eel", "Hunter bay eel"))
+                , y = reorder(taxon, -occurence), fill = as.factor(occurence))) +
+  xlab("Sites") + ylab("Taxon") + plot_theme() +
+  theme(axis.text.x = element_text(angle = 45)) +
+  scale_fill_grey(start = 1, end = 0) 
+
+hmixed #+ facet_wrap(~sites)
+```
+
+
+# 2. Community level analysis
+
+Okay so based on the graphs and exploration above, I'm going to use the dataframe that has the control samples subtracted by ASV from the field replicates. I have a couple goals for this section:
+
+2.1 Explore community composition using multivariate approaches between eelgrass and understory kelp eDNA samples
+
+2.2 Explore community composition using MV approaches between eelgrass and mixed eelgrass habitat
+
+2.3 Add in associated beach seine data for the sites where its present
+  
+    2.3.1 Compare within habitat community by beach seine and eelgrass (can this only be done using P/A for beach seine?)
+  
+
+Lets start with exploring the MV approaches with the eDNA samples
+
+## Pivot data wide
+This is done at the site field replicate level (edna.bin.sp) and keeping the field and lab replicate as unique rows (edna.bin.samplecode_rep2). The rep2 drops four instances that have no genetic fish material. 
+```{r}
+# first lets take the df that we've cleaned up (no Bos etc in it) and turn it wide
+edna.fish.wide <- edna.fish.long.bin %>%
+  separate(sample.PCR, into = c("sample.PCR", "rep"), sep = "-", remove = FALSE) %>%
+  unite(sample.PCR, sample.PCR:rep, sep = "-", remove = FALSE) %>%
+  unite(SampleCode_rep, c(SampleCode, rep)) %>%
+  group_by(SampleCode_rep, taxon) %>%
+  #summarize(counts = sum(binary)) %>%
+  #ungroup() %>%
+  #mutate(binary = ifelse(counts > 0, 1, 0)) %>%
+  pivot_wider(names_from = taxon,
+            values_from = binary, values_fn = sum) # values_fn = sum required because when we changed some levels of the taxon, there were repeat entries for unique rows (i.e. two entries for Oncorhyncus for e00289_A aka Sylburn_A_1_A). The sum adds them up so if it was 0,0 = 0 or 0,1 = 1. Have to check for instances of 1,1 = 2 cause that wont be valid in a binary form. 
+
+# above is by sample field replicate combining all tech replicates
+
+# do this only if you're summarizing to field rep (no lab rep)  
+edna.bin.sp <- edna.fish.long.bin %>%
+  group_by(SampleCode, taxon) %>%
+  summarize(counts = sum(binary)) %>%
+  ungroup() %>%
+  mutate(binary = ifelse(counts > 0, 1, 0)) %>%
+  pivot_wider(names_from = taxon, id_cols = -counts,
+            values_from = binary, values_fn = sum) %>%
+  distinct() %>%
+  column_to_rownames(var = "SampleCode")
+
+# for field and tech reps
+edna.bin.samplecode_rep <- edna.fish.wide %>%
+  dplyr::select(c(SampleCode_rep, Pholis:Agonidae)) %>%
+  column_to_rownames(var = "SampleCode_rep")
+
+# are there are field/lab rep combinations where no species were found? 
+sites_wo_reads <- edna.bin.samplecode_rep %>%
+  rownames_to_column(var = "SampleCode_rep") %>%
+  mutate(total = rowSums(select(., Pholis:Agonidae))) 
+
+# there are four sites/reps where no species were found
+no_reads <- sites_wo_reads %>%
+  filter(total == 0) %>%
+  dplyr::select(SampleCode_rep)
+
+edna.bin.samplecode_rep2 <- edna.bin.samplecode_rep %>%
+  rownames_to_column(var = "SampleCode_rep") %>%
+  anti_join(no_reads, by = c("SampleCode_rep")) %>%
+  column_to_rownames(var = "SampleCode_rep")
+```
+
+Extract just the site info
+```{r}
+# site information
+# separate the site information and the unnecessary columns
+site.info.byrep <- edna.fish.wide %>%
+  anti_join(no_reads, by = "SampleCode_rep") %>%
+  dplyr::select(-c(Pholis:Agonidae)) %>%
+  distinct()
+
+site.info.bysite <- edna.fish.long.bin %>%
+  dplyr::select(-c(sample.PCR, rep, taxon, binary)) %>%
+  distinct()
+```
+
+## Calculate dissimilarity distances
+Focus is using jaccard distances because it works well with binary data and deals appropriate with the double zero issue (in that it doesn't consider sites that are both **missing** species as more closely related). 
+
+```{r}
+# other binary distance dissimlarities - Dice, kluczynski, ochiai 
+# jaccard distance
+edna.jacc <- vegan::vegdist(edna.bin.sp, method = "jaccard", binary = T)
+plot(edna.jacc)
+
+edna.jacc2 <- vegdist(edna.bin.samplecode_rep2, method = "jaccard", binary = T)
+plot(edna.jacc2)
+
+# or using the dist feature
+# binary defaults to asymmetric binary, I dont know how this method deals with double zeros
+edna.asybin <- dist(edna.bin.sp, method = "binary")
+plot(edna.asybin)
+
+# what happens when we use bray-curtis dis?
+edna.bray <- vegdist(edna.bin.sp, method = "bray")
+```
+
+## Test homogeneity of dispersion
+randomization test to compare within-group 'dispersions' with any distance measure. This tells you if the differences between sites are because of dispersion or variation or if it truly driven by a difference in sites (as can be determined by a PERMANOVA test)
+
+H0 = within-group dispersion have no significant differences. 
+```{r}
+disp.hab <- betadisper(edna.jacc, site.info.bysite$habitat)
+anova(disp.hab) # no within group dispersion by habitat
+
+disp.sites <- betadisper(edna.jacc, site.info.bysite$sites)
+anova(disp.sites)
+
+# there is a difference of dispersion between habitat types (eel, mixed eel, and kelp)
+adonis2(edna.jacc ~ habitat, data = site.info.bysite)
+adonis2(edna.jacc ~ habitat + sites, data = site.info.bysite)
+adonis2(edna.jacc ~ sites + Sample_rep, data = site.info.bysite)
+# okays os there's a lot of variability even between unique sites, but at least there isn't signifcant variation between field replciates....
+
+disp.hab2 <- betadisper(edna.jacc2, site.info.byrep$habitat)
+anova(disp.hab2) # no within group dispersion by hab any permanova analysis will be accurate
+
+adonis2(edna.jacc2 ~ habitat, data = site.info.byrep) # true diff between habitat types
+```
+
+## NMDS
+Brief foray into nmds - 
+Do I think metric or non-metric more appropriate for this kind of data?
+```{r}
+edna.nmds <- metaMDS(edna.jacc2, k = 3, autotransform = FALSE, distance = "jaccard", 
+                     maxit = 200000)
+# with only 2 dimensions, the nmds didn't coverge and had stress over 20% 
+edna.nmds$stress 
+# with three dimensions 
+stressplot(edna.nmds) # this is with 3 dimension, 17% which is okay. 
+
+plot(edna.nmds$points)
+
+scores(edna.nmds) %>%
+  as_tibble(rownames = "SampleCode_rep") %>%
+  inner_join(site.info.byrep) %>%
+  ggplot(aes(x = NMDS1, y = NMDS2, color = habitat)) +
+  geom_point()
+
+scores(edna.nmds) %>%
+  as_tibble(rownames = "SampleCode_rep") %>%
+  inner_join(site.info.byrep) %>%
+  ggplot(aes(x = NMDS1, y = NMDS3, color = habitat)) +
+  geom_point()
+
+scores(edna.nmds) %>%
+  as_tibble(rownames = "SampleCode_rep") %>%
+  inner_join(site.info.byrep) %>%
+  ggplot(aes(x = NMDS2, y = NMDS3, color = habitat)) +
+  geom_point()
+
+```  
+
+Because its three dimensions, you need three nmds biplots to show all the data. 
+
+## PCoA
+metric dimensional scaling - principal coordinates analysis
+```{r}
+## trying pco or pcoa instead 
+pco.jacc <- cmdscale(edna.jacc)
+colnames(pco.jacc) <- c("pcoa1", "pcoa2")
+
+plot(pco.jacc)
+
+pco.jacc %>%
+  as_tibble(rownames = "site_rep") %>%
+  ggplot(aes(x = pcoa1, y = pcoa2, color = site_rep)) + 
+  geom_point()
+
+# with by the site/lab rep
+pco.jacc2 <- cmdscale(edna.jacc2, k = 2, eig = T, add = T)
+colnames(pco.jacc2$points) <- c("pcoa1", "pcoa2")
+# eiganvector - positions on the x and y axis (points)
+# eiganvalues - indicate something about the proportion of the variation explained by the different axis. So we can use eiganvalues to get porpotion explained. Some of these eiganvalues are negative. Need to be rescaled (this is done by add = T)
+
+# eiganvalue
+pco.jacc2$eig # the % explained by axis 1 is the first value divided by the total of all the eiganvalues *100
+
+percent_explained <- 100* pco.jacc2$eig/ sum(pco.jacc2$eig)
+pe <- format(round(percent_explained[1:2], digits = 1), nsmall = 1, trim = T)
+
+labs <- c(glue("PCoA 1 ({pe[1]}%)"),
+          glue("PcoA 2 ({pe[2]}%)"))
+
+ordiplot(pco.jacc2, display = "sites")
+ordiellipse(pco.jacc2, site.info.byrep$habitat)
+```
+
+## 2.1 Visualize PCoA of eDNA data
+
+```{r, eDNA.pcoa, echo = FALSE, fig.width= 14, fig.height = 7, fig.cap=fig$cap("eDNA.pcoa", "Principal coordinates analysis of the environmental DNA presence/absence data. Each dog represents an individual field sample and technical replicate instance. Points are colored by habitat that they were sampled in")}
+pco.jacc2$points %>%
+  as_tibble(rownames = "SampleCode_rep") %>%
+  left_join(site.info.byrep, by = "SampleCode_rep") %>%
+  ggplot(aes(x = pcoa1, y = pcoa2, color = habitat)) +
+  geom_point() + labs(x = labs[1], y = labs[2])
+```
+
+PCoA of all the habitat types: hard to see any clear patterns or clustering of the data points by habitat type. Each point is a unique combination of the field sample plus the lab replicate. So if we sampled 3 times in the field at a site and then did 3 lab replicates of each field sample it means that at each site we have 9 non control samples. However, since not every sample/lab replicate had genetic material in it I have to drop some of those replciates. Overall there were 169 rows of unique site:field rep:tech rep instances that went into the PCoA and distance calculation (using jaccard distances). 
+
+Still working on understanding if the same analytical approaches are valid for pcoa based data, but using the beta disper function, I determined that the assumption of homogeneity of variance holds and that the permanova test of habitat found that there are significant differences between fish communities in different habitat. 
+
+Using a PCoA we can determine how much variation in the data is explained when flattening this multidimensional data into two dimensions, approximately 18% of the data is explained. 
+
+To see the cumulative increase in variance explained increases with increased number of axes.
+Percent of the variance explained by each ordination axis when using the principal coordinates analysis. 
+```{r}
+# create scree plot that shows the percent explained
+tibble(pe = cumsum(percent_explained),
+       axis = 1:length(percent_explained)) %>%
+  ggplot(aes(x = axis, y = pe)) +
+  geom_line() +
+  coord_cartesian(xlim = c(1,15), ylim = c(0, 75))
+```
+
+Just under 20% of the variation in the data are explained by the first and second axes of PCoA. This isn't a ton but kinda to be expected when working with highly variable ecological data. To explain approximately 50% of the variation in the data you would need to visualize the data in 8 dimensions. Which my wee brain can't comprehend. 
+
+## 2.2 Eel and mixed eel - comparison
+
+```{r}
+#head(edna.bin.samplecode_rep2)
+head(site.info.byrep)
+
+# subset dataframe to just the eelgrass
+eel.samplecode_rep2 <- edna.bin.samplecode_rep2 %>%
+  rownames_to_column(var = "SampleCode_rep") %>%
+  inner_join(site.info.byrep) %>%
+  filter(habitat != "kelp") %>%
+  dplyr::select(c(SampleCode_rep, Pholis:Agonidae)) %>%
+  column_to_rownames(var = "SampleCode_rep")
+
+# filter the site info too
+eel.site.byrep <- site.info.byrep %>%
+  filter(habitat != "kelp")
+
+# calculate distance matrix
+eel.jacc <- vegdist(eel.samplecode_rep2, method = "jaccard", binary = T)
+```
+
+### Test homogeneity of dispersion
+
+randomization test to compare within-group ‘dispersions’ with any distance measure. This tells you if the differences between sites are because of dispersion or variation or if it truly driven by a difference in sites (as can be determined by a PERMANOVA test)
+
+H0 = within-group dispersion have no significant differences.
+```{r}
+disp.eel.hab <- betadisper(eel.jacc, eel.site.byrep$habitat)
+anova(disp.eel.hab)
+# no within group dispersion by habitat
+
+adonis2(eel.jacc ~ habitat, data = eel.site.byrep)
+
+# okay so there are a difference between habitat, but could this just be the fact that these sites are super variable to begin with and this is actually driven by the variation in sites?
+
+# test this
+disp.eel.sites <- betadisper(eel.jacc, eel.site.byrep$sites)
+anova(disp.eel.sites) # no within sites variability
+
+adonis2(eel.jacc ~ habitat + sites, data = eel.site.byrep)
+adonis2(eel.jacc ~ sites, data = eel.site.byrep)
+# both between group significant difference between sites and habitats. 
+
+adonis2(eel.jacc ~ habitat + sites + Sample_rep, data = eel.site.byrep)
+```
+Can the sites within habitat be considered replicates if they are significantly diff communities based on the eDNA field/tech replicates?
+At least the field replicates aren't significantly different from each other. 
+
+### Biplot visualization
+
+### NMDS
+looking at a metric approach
+```{r}
+set.seed(15)
+eel.nmds <- metaMDS(eel.jacc, k = 2, autotransform = FALSE, distance = "jaccard")
+
+eel.nmds$stress # uff it converged but the stress is 22%
+stressplot(eel.nmds) #bleck
+```
+
+visualize it
+```{r}
+scores(eel.nmds) %>%
+  as_tibble(rownames = "SampleCode_rep") %>%
+  inner_join(eel.site.byrep) %>%
+  ggplot(aes(x = NMDS1, y = NMDS2, color = habitat)) +
+  geom_point(size = 4) #+
+  #stat_ellipse() # is the default stat_ellipse what I want?
+```
+Regardless of how this plot look/turns out, the stress is too high to reliably represent these data in only 2 dimensions. 
+
+### PCoA
+
+I think potentially the better approach is to visualize this data in two dimensions with PCoA rather than nmds because it would require 3 dimensions to better visualize it. 
+
+```{r}
+pco.eel <- cmdscale(eel.jacc, k = 2, eig = T, add = T)
+colnames(pco.eel$points) <- c("pcoa1", "pcoa2")
+# eiganvector - positions on the x and y axis (points)
+# eiganvalues - indicate something about the proportion of the variation explained by the different axis. So we can use eiganvalues to get porpotion explained. Some of these eiganvalues are negative. Need to be rescaled (this is done by add = T)
+
+percent_explained2 <- 100* pco.eel$eig/ sum(pco.eel$eig)
+pe2 <- format(round(percent_explained2[1:2], digits = 1), nsmall = 1, trim = T)
+
+labs.eel <- c(glue("PCoA 1 ({pe2[1]}%)"),
+          glue("PcoA 2 ({pe2[2]}%)"))
+```
+
+```{r, eel.pcoa, echo = T, fig.width= 14, fig.height = 7, fig.cap=fig$cap("eel.pcoa", "Principal coordinates analysis of the environmental DNA presence/absence data for just eelgrass and mixed eelgrass habitat. Each dot represents an individual field sample and technical replicate instance. Points are colored by habitat that they were sampled in")}
+pco.eel$points %>%
+  as_tibble(rownames = "SampleCode_rep") %>%
+  left_join(eel.site.byrep, by = "SampleCode_rep") %>%
+  ggplot(aes(x = pcoa1, y = pcoa2, color = sites)) +
+  geom_point() + labs(x = labs.eel[1], y = labs.eel[2])
+```
+Slightly more of the variation in the data is explained by the two axes (19% over the 18% with all sites). 
+
+scree plot
+```{r}
+# create scree plot that shows the percent explained
+tibble(pe2 = cumsum(percent_explained2),
+       axis = 1:length(percent_explained2)) %>%
+  ggplot(aes(x = axis, y = pe2)) +
+  geom_line() +
+  coord_cartesian(xlim = c(1,15), ylim = c(0, 75))
+```
+
+
+Okay overall, the eDNA is arguably potentially more variable than seine data (or variable in a different way). Things I'm unsure with how to deal: 
+
+- Should I be combining the unique data from the technical replciates together? There are instances (that occur frequently) where one technical replicate will have different species occurrence than the other technical replicates. 
+
+- Why do the technical replicates end up so different? Aren't they supposed to be exact replicates mainly used for looking at any lab variability?
+
+- We dealt with the controls by subtracting the control read counts from the ASV present in each of the field/technical replciates - Is this the appropriate way of doing this? This doesn't account for the proportional/compositional nature of the data that forces the sum to 1 requirement. In the control, there are likely less genetic material so its more likely (imo) for that material to be artifically exponenetially inflatted. 
+
+- in each unique eDNA field/tech replciate unit we found between 0 - 17 species occurrences. This seems somewhat low compared to the beach seine data. Whats happening here?
+
+# 2.3 Seine data and eDNA 
+
+Next step in the analysis is to add in the beach seine data, but in order to compare it to the eDNA data we need to match up the species/taxonomic groups. This is going to take some data manipulation
+ 
+ - read in seine data - how many species did we find per seine? 
+ 
+ - what groups can we group the seine data into to best match the eDNA data, for example I know we'll need to group the eDNA data for artedius sculpins into artedius in general because we have low confidence in identifying our lil' artedius sculpins in the field. 
+ 
+ - calculate P/A for beach seinee and combine with eDNA
+ 
+ - run MV approaches
+ 
+
+
+```{r}
+head(seine)
+unique(seine$unmeasured) # there are some unmeasured fishes
+unique(seine$unmeasured_sm)
+unique(seine$species_scientific) # have 64 unique speices approximately
+unique(seine$place_name)
+
+# calculate total abundance
+seine$abundance <- as.numeric(ifelse(is.na(seine$fork_length), ifelse(is.na(seine$unmeasured), paste(seine$unmeasured_sm), paste(seine$unmeasured)), 1))
+
+# fish taxon for an entry of shiner perch
+seine$taxon <- as.factor(seine$taxon)
+levels(seine$taxon)[levels(seine$taxon)==""] <- "vertebrate"
+seine$taxon <- as.character(seine$taxon)
+
+# join in the habitat information and site names
+loc.chp3 <- cbind(chp3, bay_id)
+
+seine2 <- seine %>%
+  filter(taxon == "vertebrate") %>%
+  unite(bay_id, bay_code:bay_sample)
+
+seine2$bay_id <- trimws(seine2$bay_id)
+sgwd <- c("REFU_A", "NEFI_A", "NOSK_A", "SHIN_A", "NATZ_A", "GUKT_A")
+
+fish <- seine2 %>%
+  dplyr::select(-c(FL_checking:same., so_region, fork_length, Sex, unmeasured, unmeasured_sm, notes)) %>%
+  subset(!(bay_id %in% sgwd)) %>%
+  left_join(loc.chp3, by = c("bay_id")) %>%
+  rename(habitat = habitat.y) %>%
+  dplyr::select(-habitat.x)
+  
+
+unique(fish$bay_id) # 16 seine sites - consistent 
+unique(fish$species_scientific) # 48 species for the seines, when we add back fourmissing sites now 51 species
+names(edna.bin.samplecode_rep2)
+  
+```
+ 
+## grouping eDNA/seine data
+We need to group the eDNA/seine data into greater genus/family depending on the situation
+```{r}
+
+# Oncorhynchus/Salmonidae - seine
+Salmon <- c("Oncorhynchus gorbuscha", "Oncorhynchus keta", "Salvelinus malma", "Oncorhynchus nerka", "Oncorhynchus kisutch",
+            "Oncorhynchus clarkii") 
+
+## eDNA
+eSalmonidae <- c("Salmonidae", "Oncorhynchus")
+
+# family Embiotocidae - seine
+Embiotocidae <- c("Brachyistius frenatus", "Cymatogaster aggregata")
+# eDNA
+eEmbiotocidae <- c("Brachyistius_frenatus", "Cymatogaster_aggregata")
+
+# Clupidae (family) - seine
+Clupidae <- c("Clupea pallasii")
+
+# Ammodytidae - seine
+Ammodytidae <- "Ammodytes personatus"
+
+# Cottidae - seine
+Cottidae <- c("Leptocottus armatus", "Cottidae", "Myoxocephalus polyacanthocephalus", 
+                "Artedius spp.", "Enophrys bison", "Hemilepidotus sp.", "Hemilepidotus hemilepidotus")
+## eDNA
+eCottidae <- c("Clinocottus_acuticeps", "Chitonotus_pugetensis", "Artedius_fenestralis", "Artedius_harringtoni",
+               "Artedius_lateralis", "Enophrys_bison", "Leptocottus_armatus", "Synchirus_gilli", "Hemilepidotus",
+               "Oligocottus")
+
+# Gadidae - seine
+Gadidae <- "Gadus macrocephalus"
+
+# Hexagrammidae - seine
+Hexagrammidae <- c("Hexagrammos decagrammus", "Hexagrammos octogrammus", "Hexagrammos lagocephalus",
+                     "Hexagrammos stelleri", "Ophiodon elongatus", "Oxylebius pictus")
+## eDNA
+eHexagrammidae <- c("Hexagrammos", "Oxylebius_pictus", "Ophiodon_elongatus")
+
+# Sebastes sp - seine
+Sebastidae <- c("Sebastes sp", "Sebastes caurinus", "Sebastes maliger", "Sebastes melanops")
+
+# Anoplarchus insignis - slender cockscomb - seine
+Stichaeidae <- c("Anoplarchus insignis", "Lumpenus sagitta")
+## eDNA
+eStichaeidae <- c("Anoplarchus", "Stichaeidae")
+
+# Pholis - seine, family
+Pholidae <- c("Pholis laeta", "Apodichthys flavidus", "Pholis")
+## eDNA pholis
+ePholidae <- c("Pholis", "Apodichthys_flavidus")
+
+# Agonidae (Poachers) - seine
+Agonidae <- c("Pallasina barbata", "Podothecus accipenserinus")
+
+## eDNA
+# areAgnoidae
+
+## Flatfishes ## seine
+# Citharichthys right now keep as species specific found in both seine and eDNA
+# change the seine data
+
+# right eyed flatfishes
+Pleuronectidae <- c("Parophrys vetulus", "Pleuronichthys coenosus", "Limanda aspera", "Lepidopsetta spp.", "Platichthys stellatus")
+## edna
+ePleuronectidae <- c("Pleuronichthys", "Pleuronectidae")
+
+# three spines- Gasterosteus
+Gasterosteus <- c("Gasterosteus aculeatus")
+
+# higher order
+Teleostei <- c("Division Teleostei")
+eTeleostei <- c("Actinopteri")
+
+fish$species_scientific <- sapply(fish["species_scientific"], function(x) replace(x, x %in% Salmon, "Salmonidae"))
+fish$species_scientific <- sapply(fish["species_scientific"], function(x) replace(x, x %in% Embiotocidae, "Embiotocidae"))
+fish$species_scientific <- sapply(fish["species_scientific"], function(x) replace(x, x %in% Clupidae, "Clupidae"))
+fish$species_scientific <- sapply(fish["species_scientific"], function(x) replace(x, x %in% Ammodytidae, "Ammodytidae"))
+fish$species_scientific <- sapply(fish["species_scientific"], function(x) replace(x, x %in% Cottidae, "Cottidae"))
+fish$species_scientific <- sapply(fish["species_scientific"], function(x) replace(x, x %in% Gadidae, "Gadidae"))
+fish$species_scientific <- sapply(fish["species_scientific"], function(x) replace(x, x %in% Hexagrammidae, "Hexagrammidae"))
+fish$species_scientific <- sapply(fish["species_scientific"], function(x) replace(x, x %in% Sebastidae, "Sebastidae"))
+fish$species_scientific <- sapply(fish["species_scientific"], function(x) replace(x, x %in% Pholidae, "Pholidae"))
+fish$species_scientific <- sapply(fish["species_scientific"], function(x) replace(x, x %in% Stichaeidae, "Stichaeidae"))
+fish$species_scientific <- sapply(fish["species_scientific"], function(x) replace(x, x %in% Agonidae, "Agonidae"))
+fish$species_scientific <- sapply(fish["species_scientific"], function(x) replace(x, x %in% Pleuronectidae, "Pleuronectidae"))
+fish$species_scientific <- sapply(fish["species_scientific"], function(x) replace(x, x %in% Gasterosteus, "Gasterosteus"))
+fish$species_scientific <- sapply(fish["species_scientific"], function(x) replace(x, x %in% Teleostei, "Teleostei"))
+
+
+fish$species_scientific <- fish$species_scientific[,1]
+str(fish)
+
+fish$species_scientific <- as.factor(fish$species_scientific)
+```
+
+```{r}
+# change the eDNA data
+edna.long <- edna.bin.sp %>%
+  rownames_to_column(var = "SampleCode_rep") %>%
+  dplyr::select(-c(Enhydra_lutris, Megaptera_novaeangliae)) %>%
+  pivot_longer(cols = Actinopteri:Syngnathus_leptorhynchus, names_to = "species_scientific", values_to = "binary")
+
+edna.long$species_scientific <- sapply(edna.long["species_scientific"], function(x) replace(x, x %in% eSalmonidae, "Salmonidae"))
+edna.long$species_scientific <- sapply(edna.long["species_scientific"], function(x) replace(x, x %in% eEmbiotocidae, "Embiotocidae"))
+edna.long$species_scientific <- sapply(edna.long["species_scientific"], function(x) replace(x, x %in% eCottidae, "Cottidae"))
+edna.long$species_scientific <- sapply(edna.long["species_scientific"], function(x) replace(x, x %in% eHexagrammidae, "Hexagrammidae"))
+edna.long$species_scientific <- sapply(edna.long["species_scientific"], function(x) replace(x, x %in% ePholidae, "Pholidae"))
+edna.long$species_scientific <- sapply(edna.long["species_scientific"], function(x) replace(x, x %in% eStichaeidae, "Stichaeidae"))
+edna.long$species_scientific <- sapply(edna.long["species_scientific"], function(x) replace(x, x %in% ePleuronectidae, "Pleuronectidae"))
+edna.long$species_scientific <- sapply(edna.long["species_scientific"], function(x) replace(x, x %in% eTeleostei, "Teleostei"))
+
+edna.long$species_scientific <- edna.long$species_scientific[,1]
+str(edna.long)
+
+edna.long$species_scientific <- gsub("_", " ", edna.long$species_scientific)
+
+# check the species in seines and eDNA
+levels(as.factor(fish$species_scientific))
+levels(as.factor(edna.long$species_scientific))
+```
+ 
+Okay so now we've figured out where these species can overlap and "rounded up" taxonomically for instances where eDNA only was able to identify species to the genus or family level - lets combine the data frames
+```{r}
+glimpse(fish)
+glimpse(edna.long)
+
+fish$gear <- "beach_seine"
+
+seine.info <- fish %>%
+  dplyr::select(place_name:tide_time, bay_id, habitat) %>%
+  distinct()
+
+sp.info <- fish %>%
+  dplyr::select(c(bay_id, place_name, habitat, species_common, species_scientific, sp_code))
+
+fish$species_scientific <- as.character(fish$species_scientific)
+
+fish2 <- fish %>%
+  dplyr::group_by(bay_id, sites, species_scientific) %>%
+  dplyr::mutate(counts = sum(abundance)) %>%
+  dplyr::select(-abundance) %>%
+  distinct() %>%
+  unite(bay_id_gear, c(bay_id, gear)) %>%
+  ungroup() %>%
+  distinct() %>%
+  dplyr::select(c(bay_id_gear, species_scientific, counts)) %>%
+  group_by(bay_id_gear, species_scientific) %>%
+  dplyr::summarise(counts2 = sum(counts)) %>%
+  mutate(binary = if_else(counts2 > 0, 1, 0)) %>%
+  dplyr::select(-counts2) %>%
+  distinct()
+
+glimpse(fish2) 
+
+# options here when dealing with the eDNA.long, we can either keep the field replicates separate (as the following) or we can combine the replicates together 
+edna.by.rep <- edna.long %>%
+  separate(SampleCode_rep, into = c("year", "bay_code", "bay_letter", "rep")) %>%
+  unite(bay_id, bay_code:bay_letter) %>%
+  group_by(bay_id, species_scientific, rep) %>%
+  dplyr::mutate(total = sum(binary)) %>%
+  dplyr::select(-binary) %>%
+  mutate(binary = if_else(total > 0, 1, 0)) %>%
+  dplyr::select(-total) %>%
+  distinct()
+
+
+edna.by.rep %>%
+  group_by(bay_id, species_scientific) %>%
+  dplyr::summarize(total = sum(binary)) %>%
+  ggplot() +
+  geom_tile(aes(x = bay_id, y = reorder(species_scientific, -total), fill = total)) +
+  plot_theme() +
+  theme(axis.text.x = element_text(angle = 45))
+edna.by.rep$gear <- "eDNA"
+
+edna.by.site <- edna.by.rep %>%
+  group_by(bay_id, species_scientific, gear) %>%
+  dplyr::summarise(total = sum(binary)) %>%
+  distinct() %>%
+  mutate(binary = if_else(total > 0, 1, 0)) %>%
+  dplyr::select(-total) %>%
+  distinct() %>%
+  unite(bay_id_gear, c(bay_id, gear))
+
+# combine beach seine and eDNA data, by site by species and pivot wide
+full.dat <- rbind(fish2, edna.by.site) %>%
+  pivot_wider(names_from = "species_scientific", values_from = "binary", values_fill = 0) %>%
+  column_to_rownames("bay_id_gear")
+head(full.dat)
+
+full.dat.long <- pivot_longer(data = full.dat, cols = c("Aulorhynchus flavidus":"Rhamphocottus richardsonii"), names_to = "species_scientific", values_to = "binary")
+```
+
+ calculate distances for the combined eDNA/beach seine data
+```{r}
+comb.jacc <- vegdist(full.dat, method = "jaccard", binary = T)
+plot(comb.jacc)
+
+# for just eelgrass sites
+
+full.eel <- full.dat %>%
+  rownames_to_column(var = "bay_id_gear") %>%
+  separate("bay_id_gear", into = c("bay", "id", "gear"), extra = "merge") %>%
+  unite(bay_id, bay:id) %>%
+  left_join(seine.info) %>%
+  filter(habitat != "kelp") %>%
+  unite(bay_id_gear, bay_id:gear) %>%
+  column_to_rownames(var = "bay_id_gear") %>%
+  dplyr::select(-c(place_name:habitat))
+
+full.kelp <- full.dat %>%
+  rownames_to_column(var = "bay_id_gear") %>%
+  separate("bay_id_gear", into = c("bay", "id", "gear"), extra = "merge") %>%
+  unite(bay_id, bay:id) %>%
+  left_join(seine.info) %>%
+  filter(habitat == "kelp") %>%
+  unite(bay_id_gear, bay_id:gear) %>%
+  column_to_rownames(var = "bay_id_gear") %>%
+  dplyr::select(-c(place_name:habitat))
+
+eelc.jacc <- vegdist(full.eel, method = "jaccard", binary = T)
+plot(eelc.jacc)
+
+kelpc.jacc <- vegdist(full.kelp, method = "jaccard", binary = T)
+plot(kelpc.jacc)
+```
+
+## NMDS
+looking at a metric approach
+```{r}
+comb.nmds <- metaMDS(comb.jacc, k = 2, autotransform = FALSE, distance = "jaccard", maxit = 9999)
+comb.nmds$stress # 21% kinda almost past what we should accept
+stressplot(comb.nmds)
+
+comb.nmds.pts <- as.data.frame(comb.nmds$points)
+comb.nmds.pts %>%
+  rownames_to_column(var = "bay_id_gear") %>%
+  separate(bay_id_gear, into = c("bay", "id", "gear"), extra = "merge") %>%
+  unite(bay_id, bay:id) %>%
+  ggplot(aes(x = MDS1, y = MDS2, color = bay_id)) +
+  geom_point() +
+  geom_line()
+
+```
+
+##PCoA
+```{r}
+pco.combo <- cmdscale(comb.jacc, k = 2, eig = T, add = T)
+colnames(pco.combo$points) <- c("pcoa1", "pcoa2")
+# eiganvector - positions on the x and y axis (points)
+# eiganvalues - indicate something about the proportion of the variation explained by the different axis. So we can use eiganvalues to get porpotion explained. Some of these eiganvalues are negative. Need to be rescaled (this is done by add = T)
+
+percent_explained3 <- 100* pco.combo$eig/ sum(pco.combo$eig)
+pe3 <- format(round(percent_explained3[1:2], digits = 1), nsmall = 1, trim = T)
+
+pco.perc <- c(glue("PCoA 1 ({pe3[1]}%)"),
+          glue("PcoA 2 ({pe3[2]}%)"))
+
+pco.combo$points %>%
+  as_tibble(rownames = "bay_id_gear") %>%
+  separate(bay_id_gear, into = c("bay", "id", "gear", "extra"), extra = "merge") %>%
+  dplyr::select(-extra) %>%
+  unite(bay_id, bay:id) %>%
+  left_join(seine.info) %>%
+  ggplot(aes(x = pcoa1, y = pcoa2)) +
+  geom_point(aes(color = as.factor(habitat))) + 
+  labs(x = pco.perc[1], y = pco.perc[2]) 
+```
+
+
+## Eelgrass pcoa
+
+Lets look at just the eelgrass sites and see how the variability by gear type shows up. 
+```{r}
+# eelc.jacc - jaccard distance eelgrass only sites (includes mixed eelgrass)
+eelc.pco <- cmdscale(eelc.jacc, k =2, eig = T, add = T)
+
+colnames(eelc.pco$points) <- c("pcoa1", "pcoa2")
+
+
+percent_explained4 <- 100* eelc.pco$eig/ sum(eelc.pco$eig)
+pe4 <- format(round(percent_explained4[1:2], digits = 1), nsmall = 1, trim = T)
+
+pco.perc4 <- c(glue("PCoA 1 ({pe4[1]}%)"),
+          glue("PcoA 2 ({pe4[2]}%)"))
+
+eelc.pco$points %>%
+  as_tibble(rownames = "bay_id_gear") %>%
+  separate(bay_id_gear, into = c("bay", "id", "gear", "extra"), extra = "merge") %>%
+  dplyr::select(-extra) %>%
+  unite(bay_id, bay:id) %>%
+  left_join(seine.info) %>%
+  ggplot(aes(x = pcoa1, y = pcoa2)) +
+  geom_point(aes(color = gear)) + 
+  labs(x = pco.perc4[1], y = pco.perc4[2], main = "PCoA of eelgrass sites sampled with beach seine or eDNA") +
+  stat_ellipse(aes(color = gear))
+```
+
+### Eel nmds
+
+Using nmds approaches, we can also test for homogeneity of dispersion and differences between species comp of group.
+
+Randomization test to compare within-group 'dispersions' with any distance measure. This tells you if the differences between sites are because of dispersion or variation or if it truly driven by a difference in sites (as can be determined by a PERMANOVA test)
+
+H0 = within-group dispersion have no significant differences. 
+```{r}
+# extract gear info from distance matrix
+gear.eel <- full.eel %>%
+  rownames_to_column(var = "bay_id_gear") %>%
+  separate(bay_id_gear, into = c("bay", "id", "gear"), extra = "merge") %>%
+  dplyr::select(c(bay, id, gear)) %>%
+  unite(bay_id, bay:id)
+
+disp.gear <- betadisper(eelc.jacc, gear.eel$gear)
+anova(disp.gear) 
+```
+
+H0 accepted, there is no significant variation within gear type groups
+
+PERMANOVA: Then test for significant difference in species composition between gear
+
+If the betadisper/analysis of dispersion null hypothesis is REJECTED then any difference in the PERMANOVA analysis between groups - could be driven by this difference in dispersion rather than a true difference in species composition between groups (in this case years). 
+
+PERMANOVA assumption: 1) independence 2) homogeneity of dispersion
+Meaning samples/objects are exchangeable, if H0 is true. 
+Always test diff in dispersion among groups FIRST (done above w/ betadisper)
+
+```{r}
+# analysis of dispersion accepted the null hypothesis
+# This is the test of "location", if there are sig. changes in species composition between gear groups
+# H0 no group differences
+
+adonis2(eelc.jacc ~ gear, data = gear.eel)
+```
+There is a significant variation in species composition betweeen gear type when comparing beach seine and eDNA.
+This can be visualized using stat_ellipse in ggplot in the biplot of nmds below. 
+
+```{r}
+eel.nmds <- metaMDS(eelc.jacc, k = 2, autotransform = FALSE, distance = "jaccard", maxit = 9999)
+eel.nmds$stress # 16% this is good
+stressplot(eel.nmds)
+
+eel.nmds.pts <- as.data.frame(eel.nmds$points)
+eel.nmds.pts %>%
+  rownames_to_column(var = "bay_id_gear") %>%
+  separate(bay_id_gear, into = c("bay", "id", "gear"), extra = "merge") %>%
+  unite(bay_id, bay:id) %>%
+  ggplot(aes(x = MDS1, y = MDS2, color = gear)) +
+  geom_point() + 
+  stat_ellipse(aes(color = gear))
+
+plot(eel.nmds.pts)
+ordispider(eel.nmds, gear.eel$gear, display = "sites")
+```
+
+What is driving the variability/difference in species composition between gear types for the eelgrass sites?
+We can use simper to look at this
+
+From help documentation - "method gives the contribution of each species to overall dissimilarities, but these are caused by variation in species abundances, and only partly by diff. among groups." 
+```{r}
+sim.eel <- simper(full.eel, gear.eel$gear, permutations = 999)
+summary(sim.eel)
+```
+
+We can also look at species that are significantly correlated with the nmds axes. Because it looks like the variability between gear type falls along the first axis can look at what species drive that seperation of gear type
+
+```{r warning=FALSE}
+# create df of scores across some variable (habitat or habitat richness, year, julian etc)
+scrs <- as.data.frame(scores(eel.nmds, display = 'sites'))
+scrs <- cbind(as.data.frame(scrs), gear = gear.eel$gear)
+cent <- aggregate(cbind(NMDS1, NMDS2) ~ gear, data =scrs, FUN = mean)
+segs <- merge(scrs, setNames(cent, c('gear', 'oNMDS1', 'oNMDS2')),
+              by = "gear", sort = FALSE)
+
+# create species vectors correlated w/ nmds axis - untransformed data
+vec.sp <- envfit(eel.nmds$points, full.eel[,1:30], perm = 999)
+vec.sp.arrows <- scores(vec.sp, display = "vectors")
+vec.sp.dat <- data.frame(vec.sp.arrows)
+vec.sp.dat$pvals <- vec.sp$vectors$pvals
+vec.sp.dat$sp_code <- row.names(vec.sp.dat)
+vec.sp.dat$r2 <- vec.sp$vectors$r
+
+# filter by species that are sig correlated w/ nmds axis
+vec.sp.dat.sig <- vec.sp.dat %>%
+  filter(pvals < 0.05)
+
+vec.sp.dat.sig <- vec.sp.dat.sig %>%
+  dplyr::select(MDS1, MDS2, pvals, sp_code, r2) 
+
+# scale by nmds? 
+scalefactor <- min(max(scrs$NMDS1) - min(scrs$NMDS1), max(scrs$NMDS2) - min(scrs$NMDS2))
+vec.sp.dat.sig$MDS1_sc <- vec.sp.dat.sig$MDS1 * (scalefactor * vec.sp.dat.sig$r2)
+vec.sp.dat.sig$MDS2_sc <- vec.sp.dat.sig$MDS2 * (scalefactor * vec.sp.dat.sig$r2)
+
+```
+Visualize the nmds w/ beach seine eDNA data with species vectors
+```{r, eel.nmds, echo = FALSE, fig.width= 10, fig.height = 7, fig.cap=fig$cap("eel.nmds", "Nonmetric multidimensional scaling of species communities with eelgrass meadows. Color represents the gear type used to sample the community - either beach seine or environmental DNA. Species vectors are species that are significnatly correlated with the NMDS axes and length represents the strength of that correlation (r2)")}
+ggplot(data = scrs, aes(x = NMDS1, y = NMDS2, color = gear)) +
+  geom_point(data = scrs, size = 1.5) +
+  stat_ellipse(size = 1.5) +
+  plot_theme() +
+  theme_classic(base_size = 18) + labs(x = "NMDS1", y = "NMDS2", title = "Eelgrass meadows") +
+  theme(panel.border = element_rect(fill = NA), axis.text.x = element_blank(), 
+        axis.text.y = element_blank()) +
+  geom_segment(data = vec.sp.dat.sig, aes(x = 0, xend = MDS1_sc, y = 0, yend = MDS2_sc),
+               inherit.aes=FALSE) +  # add arrows
+  geom_label_repel(data = vec.sp.dat.sig, aes(x = MDS1_sc, y = MDS2_sc, label = sp_code), 
+                   size = 5, inherit.aes = FALSE) +
+  scale_color_manual(name = "Gear Type", labels = c("Beach seine", "eDNA"), values = c("#5ab4ac", "#d8b365"))
+  
+```
+
+Based on both the simper and correlation analyses (using envfit) it looks like herring (clupeidae) and bay pipefish (Syngnathus leptorhynchus) are the species that are strongly correlated with the first axis of the nmds. With hering being more strongly correlated with the eDNA samples and bay pipefish more strongly correlated with beach seine methods. Citharicthys sitgmaeus (speckled sanddab) were more associated with eDNA than beach seine. 
+
+Why do I think this? Well for instance, groups of herring might be present nearby the site that was sampled but because the beach seines can only sample a limited area perhaps the group of herring were just missed. Similar with the flatfishes (speckled sanddab) especially since they are bottom associated; however, they are found in some seines so that doesn't explain it fully. 
+
+What is particular interesting is that bay pipefish separate the eDNA and beach seine - and are found in seines when they are not found in eDNA. Could this be related to the fact that they are more closely related to sea horses and have closer to plates rather than scales - less slime?
+
+
+## Kelp PCoA
+
+```{r}
+# kelpc.jacc - jaccard distance kelp only sites 
+kelpc.pco <- cmdscale(kelpc.jacc, k =2, eig = T, add = T)
+colnames(kelpc.pco$points) <- c("pcoa1", "pcoa2")
+
+
+percent_explained5 <- 100* kelpc.pco$eig/ sum(kelpc.pco$eig)
+pe5 <- format(round(percent_explained5[1:2], digits = 1), nsmall = 1, trim = T)
+
+pco.perc5 <- c(glue("PCoA 1 ({pe5[1]}%)"),
+          glue("PcoA 2 ({pe5[2]}%)"))
+
+kelpc.pco$points %>%
+  as_tibble(rownames = "bay_id_gear") %>%
+  separate(bay_id_gear, into = c("bay", "id", "gear", "extra"), extra = "merge") %>%
+  dplyr::select(-extra) %>%
+  unite(bay_id, bay:id) %>%
+  left_join(seine.info) %>%
+  ggplot(aes(x = pcoa1, y = pcoa2)) +
+  geom_point(aes(color = gear)) + 
+  labs(x = pco.perc5[1], y = pco.perc5[2]) +
+  stat_ellipse(aes(color = gear))
+
+
+```
+
+definitely looks like its seperating between gear type along the first axis
+
+### kelp nmds
+
+Using nmds approaches, we can also test for homogeneity of dispersion and differences between species comp of group.
+
+Randomization test to compare within-group 'dispersions' with any distance measure. This tells you if the differences between sites are because of dispersion or variation or if it truly driven by a difference in sites (as can be determined by a PERMANOVA test)
+
+H0 = within-group dispersion have no significant differences. 
+```{r}
+# extract gear info from distance matrix
+gear.kelp <- full.kelp %>%
+  rownames_to_column(var = "bay_id_gear") %>%
+  separate(bay_id_gear, into = c("bay", "id", "gear"), extra = "merge") %>%
+  dplyr::select(c(bay, id, gear)) %>%
+  unite(bay_id, bay:id)
+
+disp.gear2 <- betadisper(kelpc.jacc, gear.kelp$gear)
+anova(disp.gear2) 
+```
+H0 rejected at pvalue 0.05, there is significant variation within gear type groups - so any conclusions from permanova are conflated by the variation within gear type group. 
+
+PERMANOVA: Then test for significant difference in species composition between gear
+
+If the betadisper/analysis of dispersion null hypothesis is REJECTED then any difference in the PERMANOVA analysis between groups - could be driven by this difference in dispersion rather than a true difference in species composition between groups (in this case years). 
+
+PERMANOVA assumption: 1) independence 2) homogeneity of dispersion
+Meaning samples/objects are exchangeable, if H0 is true. 
+Always test diff in dispersion among groups FIRST (done above w/ betadisper)
+
+```{r}
+# analysis of dispersion accepted the null hypothesis
+# This is the test of "location", if there are sig. changes in species composition between gear groups
+# H0 no group differences
+
+adonis2(kelpc.jacc ~ gear, data = gear.kelp)
+```
+There is a significant variation by gear type but it is conflated with the within group variation. 
+Can still visualize this using ellipse below: 
+
+```{r}
+kelp.nmds <- metaMDS(kelpc.jacc, k = 2, autotransform = FALSE, distance = "jaccard", maxit = 9999)
+kelp.nmds$stress # 17.6% this is good
+stressplot(kelp.nmds)
+
+kelp.nmds.pts <- as.data.frame(kelp.nmds$points)
+kelp.nmds.pts %>%
+  rownames_to_column(var = "bay_id_gear") %>%
+  separate(bay_id_gear, into = c("bay", "id", "gear"), extra = "merge") %>%
+  unite(bay_id, bay:id) %>%
+  ggplot(aes(x = MDS1, y = MDS2, color = gear)) +
+  geom_point() + 
+  stat_ellipse(aes(color = gear))
+
+plot(kelp.nmds.pts)
+ordispider(kelp.nmds, gear.kelp$gear, display = "sites")
+```
+
+What is driving the variability/difference in species composition between gear types for the understory kelp sites?
+We can use simper to look at this
+
+From help documentation - "method gives the contribution of each species to overall dissimilarities, but these are caused by variation in species abundances, and only partly by diff. among groups." 
+```{r}
+sim.kelp <- simper(full.kelp, gear.kelp$gear, permutations = 999)
+summary(sim.kelp)
+```
+
+
+We can also look at species that are significantly correlated with the nmds axes. Because it looks like the variability between gear type falls along the first axis can look at what species drive that separation of gear type
+
+```{r warning=FALSE}
+# create df of scores across some variable (habitat or habitat richness, year, julian etc)
+scrs2 <- as.data.frame(scores(kelp.nmds, display = 'sites'))
+scrs2 <- cbind(as.data.frame(scrs2), gear = gear.kelp$gear)
+cent2 <- aggregate(cbind(NMDS1, NMDS2) ~ gear, data =scrs2, FUN = mean)
+segs2 <- merge(scrs2, setNames(cent2, c('gear', 'oNMDS1', 'oNMDS2')),
+              by = "gear", sort = FALSE)
+
+# create species vectors correlated w/ nmds axis - untransformed data
+vec.sp2 <- envfit(kelp.nmds$points, full.kelp[,1:30], perm = 999)
+vec.sp.arrows2 <- scores(vec.sp2, display = "vectors")
+vec.sp.dat2 <- data.frame(vec.sp.arrows2)
+vec.sp.dat2$pvals <- vec.sp2$vectors$pvals
+vec.sp.dat2$sp_code <- row.names(vec.sp.dat2)
+vec.sp.dat2$r2 <- vec.sp2$vectors$r
+
+# filter by species that are sig correlated w/ nmds axis
+vec.sp.dat.sig2 <- vec.sp.dat2 %>%
+  filter(pvals < 0.05)
+
+vec.sp.dat.sig2 <- vec.sp.dat.sig2 %>%
+  dplyr::select(MDS1, MDS2, pvals, sp_code, r2) 
+
+# scale by nmds? 
+scalefactor2 <- min(max(scrs2$NMDS1) - min(scrs2$NMDS1), max(scrs2$NMDS2) - min(scrs2$NMDS2))
+vec.sp.dat.sig2$MDS1_sc <- vec.sp.dat.sig2$MDS1 * (scalefactor2 * vec.sp.dat.sig2$r2)
+vec.sp.dat.sig2$MDS2_sc <- vec.sp.dat.sig2$MDS2 * (scalefactor2 * vec.sp.dat.sig2$r2)
+
+```
+
+Visualize the nmds w/ beach seine eDNA data with species vectors for kelp sites
+```{r, kelp.nmds, echo = FALSE, fig.width= 10, fig.height = 7, fig.cap=fig$cap("kelp.nmds", "Nonmetric multidimensional scaling of species communities with understory kelp beds. Color represents the gear type used to sample the community - either beach seine or environmental DNA. Species vectors are species that are significnatly correlated with the NMDS axes and length represents the strength of that correlation (r2)")}
+ggplot(data = scrs2, aes(x = NMDS1, y = NMDS2, color = gear)) +
+  geom_point(data = scrs2, size = 1.5) +
+  stat_ellipse(size = 1.5) +
+  plot_theme() +
+  theme_classic(base_size = 18) + labs(x = "NMDS1", y = "NMDS2", title = "Understory kelp") +
+  theme(panel.border = element_rect(fill = NA), axis.text.x = element_blank(), 
+        axis.text.y = element_blank()) +
+  geom_segment(data = vec.sp.dat.sig2, aes(x = 0, xend = MDS1_sc, y = 0, yend = MDS2_sc),
+               inherit.aes=FALSE) +  # add arrows
+  geom_label_repel(data = vec.sp.dat.sig2, aes(x = MDS1_sc, y = MDS2_sc, label = sp_code), 
+                   size = 5, inherit.aes = FALSE) +
+  scale_color_manual(name = "Gear Type", labels = c("Beach seine", "eDNA"), values = c("#5ab4ac", "#d8b365"))
+  
+```
+
+Looks like primarily herring and stichaeidae family sperating the eDNA and beach seining. With herring and stichaeidae (snake prickleback and slender cockscomb) being present in eDNA and not in seine. I dont have any great explainations for why stichaeidae drives the separation in community composition between the two... but it does.
+
