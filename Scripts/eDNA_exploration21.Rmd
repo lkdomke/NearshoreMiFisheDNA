@@ -63,11 +63,11 @@ fig <- local({
 
 # Read in data
 ```{r}
-edna <- read.csv("/Users/liadomke/Desktop/Grad School/UAF/Data/Chp3_SeascapeDynamics/Data/eDNA_tax_filtered_3-24-22.csv")
+edna <- read.csv("/Users/liadomke/Desktop/Grad School/UAF/Data/NearshoreMiFisheDNA/Data/eDNA_tax_filtered_3-24-22.csv")
 loc <- read.csv("/Users/liadomke/Desktop/Grad School/UAF/Data/Chp3_SeascapeDynamics/Data/chp3_sites.csv")
 seine <- read.csv("/Users/liadomke/Desktop/Grad School/UAF/Data/Chp3_SeascapeDynamics/Data/fish_beach_seine_2021_1-5-21.csv")
 
-edna.minus.control <- read.csv("/Users/liadomke/Desktop/Grad School/UAF/Data/Chp3_SeascapeDynamics/Data/eDNA_tax_filtered_minus_controls_4-15-22.csv", stringsAsFactors = FALSE, header = TRUE)
+edna.minus.control <- read.csv("/Users/liadomke/Desktop/Grad School/UAF/Data/NearshoreMiFisheDNA/Data/eDNA_tax_filtered_minus_controls_4-15-22.csv", stringsAsFactors = FALSE, header = TRUE)
 ```
 
 visualize eDNA reads
