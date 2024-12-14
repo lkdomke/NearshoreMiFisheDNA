@@ -1,0 +1,82 @@
+---
+title: "mv_edna_seine_exploration"
+output: html_document
+date: "2024-12-14"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Multivariate exploration of the edna and beach seine data: 
+
+Decisions Lia & Kim made regarding the multivariate approach for eDNA and seine data (12/12/24): 
+
+We will focus on the “core” species that we looked at in the mock communities and
+Potentially repeat analyses with all data. 
+
+Steps: 
+1. Use simple.Mean in quantitative model output which is the mean at the bottle level (after conventional eDNA cleaning steps). 
+
+2. Make sure seine data is in proportional space 
+
+3. Perform Wisconsin double standardization
+
+4. Calc bray curtis distance (optional try jaccards distance w/ P/A data). 
+
+5. Put on NMDS
+
+
+# library
+```{r}
+library(tidyverse)
+library(lubridate)
+```
+
+# data
+```{r}
+# pull data from Kim's repository that we cloned and placed on our desktop - so if Kim makes any updates to the quant model that was used to generate these data them we need to pull it again
+edna <- read.csv("../nearshore_eDNA/outputs/samples_w_mocks_updated/field_quant/qm_results_20241125.csv") %>%
+  dplyr::select(-c(X, comm_idx:raw.97.5, SP)) %>%
+  mutate(Species = ifelse(Species == "zRefSpecies_Clupea pallasii", "Clupea pallasii", Species),
+         type = "edna")
+# for now we're going to focus on the simple.Mean column which is the  mean at the field replicate (bottle) level that averages the technical (PCR) replicates. 
+
+
+# for the beach seine data, we want to pull both the beach seine abundance and biomass data for 2021 and 2022. 
+seine <- read.csv("Data/seine_biomass_at_edna_sites.csv") %>%
+  dplyr::select(c(bay_year, bay_id, habitat, sp_code, species_common, species_scientific, 
+                  fork_length, mass_g, abundance)) %>%
+  mutate(type = "seine")
+
+site.info <- read.csv("Data/seine_biomass_at_edna_sites.csv") %>%
+  dplyr::select(c(bay_year, bay_id, place_name, habitat, date, julian, latitude, longitude)) %>%
+  distinct()
+```
+
+
+
+Quick dataframe checks and clean up
+```{r}
+# does SP match species
+table(edna$Species == edna$SP) # it does given the fix above - good. 
+count(unique(edna[c("collection_year", "bay_id")])) # 39 sites
+
+table(edna$collection_year, edna$bay_id) # clam_a, klwa_a both occur in 2021 and 2022. I think only 2022 matches the seine collections so will need to remove based on year and bay id 
+# every collection has 60 (20 species identified based on the mock community * 3 samples per site) except for Sylb_b and tahb_A likely because a certain sample was removed because it was too different. 
+
+glimpse(site.info)
+```
+
+are the sites that are in eDNA also present in the seines
+```{r}
+
+```
+
+
+
+
+
+
