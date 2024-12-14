@@ -63,11 +63,11 @@ fig <- local({
 
 # Read in data
 ```{r}
-edna <- read.csv("/Users/liadomke/Desktop/Grad School/UAF/Data/NearshoreMiFisheDNA/Data/eDNA_tax_filtered_3-24-22.csv")
-loc <- read.csv("/Users/liadomke/Desktop/Grad School/UAF/Data/Chp3_SeascapeDynamics/Data/chp3_sites.csv")
-seine <- read.csv("/Users/liadomke/Desktop/Grad School/UAF/Data/Chp3_SeascapeDynamics/Data/fish_beach_seine_2021_1-5-21.csv")
+edna <- read.csv("Data/eDNA_tax_filtered_3-24-22.csv")
+#loc <- read.csv("../../Chp3_SeascapeDynamics/Data/chp3_sites.csv")
+#seine <- read.csv("/Users/liadomke/Desktop/Grad School/UAF/Data/Chp3_SeascapeDynamics/Data/fish_beach_seine_2021_1-5-21.csv")
 
-edna.minus.control <- read.csv("/Users/liadomke/Desktop/Grad School/UAF/Data/NearshoreMiFisheDNA/Data/eDNA_tax_filtered_minus_controls_4-15-22.csv", stringsAsFactors = FALSE, header = TRUE)
+edna.minus.control <- read.csv("Data/eDNA_tax_filtered_minus_controls_4-15-22.csv", stringsAsFactors = FALSE, header = TRUE)
 ```
 
 visualize eDNA reads
@@ -178,7 +178,9 @@ p1 <- edna.red.hab %>%
   ggplot() +
   geom_col(aes(x = field_tech_rep, y = count, fill = taxon)) + plot_theme() +
   theme(axis.text.x = element_text(angle = 45))
-p1 + facet_wrap(~sites)
+p1.sites <- p1 + facet_wrap(~sites)
+
+#ggsave(p1.sites, filename = "../Images/eDNA_plots/eDNA_reads_by_techsample.png")
 ```
 
 
@@ -206,7 +208,9 @@ p2 <- edna.red.hab %>%
   ggplot() +
   geom_col(aes(x = field_tech_rep, y = count, fill = taxon)) + plot_theme() +
   theme(axis.text.x = element_text(angle = 45))
-p2 + facet_wrap(~sites)
+p2.sites <- p2 + facet_wrap(~sites)
+
+#ggsave(p2.sites, filename = "../Images/eDNA_plots/eDNA_reads_by_techsample_kelp.png")
 ```
 
 These graphs are similar to the eelgrass sites. In this case the sites that have questionable results are: moira sound kelp - with very few ASV counts across the replicates, Nichols bay kelp - almost no species present in the 3rd field replicate, Sylburn harbor klep - with not very consistent results across the field replicates and various species present in the control samples. 
