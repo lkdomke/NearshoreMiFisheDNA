@@ -33,15 +33,17 @@ Steps:
 ```{r}
 library(tidyverse)
 library(lubridate)
+library(ggrepel)
 ```
 
 # data
 ```{r}
 # pull data from Kim's repository that we cloned and placed on our desktop - so if Kim makes any updates to the quant model that was used to generate these data them we need to pull it again
 edna <- read.csv("../nearshore_eDNA/outputs/samples_w_mocks_updated/field_quant/qm_results_20241125.csv") %>%
-  dplyr::select(-c(X, comm_idx:raw.97.5, SP)) %>%
+  dplyr::select(-c(X, comm_idx:mock1.97.5, raw.2.5:raw.97.5, SP)) %>%
   mutate(Species = ifelse(Species == "zRefSpecies_Clupea pallasii", "Clupea pallasii", Species),
-         type = "edna")
+         type = "edna") %>%
+  unite("bay_year", c(bay_id, collection_year))
 # for now we're going to focus on the simple.Mean column which is the  mean at the field replicate (bottle) level that averages the technical (PCR) replicates. 
 
 
@@ -51,9 +53,7 @@ seine <- read.csv("Data/seine_biomass_at_edna_sites.csv") %>%
                   fork_length, mass_g, abundance)) %>%
   mutate(type = "seine")
 
-site.info <- read.csv("Data/seine_biomass_at_edna_sites.csv") %>%
-  dplyr::select(c(bay_year, bay_id, place_name, habitat, date, julian, latitude, longitude)) %>%
-  distinct()
+
 ```
 
 
@@ -62,21 +62,388 @@ Quick dataframe checks and clean up
 ```{r}
 # does SP match species
 table(edna$Species == edna$SP) # it does given the fix above - good. 
-count(unique(edna[c("collection_year", "bay_id")])) # 39 sites
-
-table(edna$collection_year, edna$bay_id) # clam_a, klwa_a both occur in 2021 and 2022. I think only 2022 matches the seine collections so will need to remove based on year and bay id 
+length(unique(edna$bay_year)) # 39 sites
+ # clam_a, klwa_a both occur in 2021 and 2022. I think only 2022 matches the seine collections so will need to remove based on year and bay id 
 # every collection has 60 (20 species identified based on the mock community * 3 samples per site) except for Sylb_b and tahb_A likely because a certain sample was removed because it was too different. 
 
-glimpse(site.info)
 ```
 
 are the sites that are in eDNA also present in the seines
 ```{r}
+seine.sites <- as.data.frame(unique(seine$bay_year)) # 35 sites with seine data
+colnames(seine.sites) <- "bay_year"
+edna.sites <- as.data.frame(unique(edna$bay_year)) # 39 sites with edna data
+colnames(edna.sites) <- "bay_year"
+
+anti_join(edna.sites, seine.sites) # four sites in the edna that aren't present in the seine sites. klwa_2021, brtb_a_2021, clam_a_2021, nfei_b_2021 which is consistent with my memory of the situation
+anti_join(seine.sites, edna.sites) # non in seine that don't have edna... good. 
+
+edna.red <- filter(edna, !(bay_year %in% c("KLWA_A_2021", "BTRB_A_2021", "CLAM_A_2021", "NFEI_B_2021")))
+```
+
+# Filter seine data by the edna species groups
+Create wide dataframes for both groups and combine
+```{r}
+sci.names <- data.frame(Species = unique(edna$Species))
+
+# create groups to rename the seine data, make in proportional space, and then pivot wider 
+seine.wide <- seine %>%
+ mutate(species_scientific = ifelse(species_scientific %in% c("Gadus macrocephalus", "Gadus chalcogrammus"), 
+                                    "Gadus", species_scientific),
+         species_scientific = ifelse(species_scientific %in% c("Hexagrammos stelleri", "Hexagrammos octogrammus", 
+                                               "Hexagrammos lagocephalus", "Hexagrammos decagrammus", 
+                                               "Oxylebius pictus"), "Hexagrammos", species_scientific),
+         species_scientific = ifelse(species_scientific == "Lepidopsetta spp.", "Lepidopsetta", species_scientific),
+         species_scientific = ifelse(species_scientific %in% c("Sebastes caurinus", "Sebastes maliger"), 
+                                     "Sebastes 1", species_scientific),
+         species_scientific = ifelse(species_scientific == "Sebastes auriculatus", "Sebastes 2", species_scientific),
+         species_scientific = ifelse(species_scientific %in% c("Sebastes melanops", "Sebastes sp"), "Sebastes 3",
+                                     species_scientific)) %>%
+  filter(species_scientific %in% sci.names$Species) %>%
+  dplyr::select(-c(sp_code, species_common, fork_length, mass_g, bay_id)) %>%
+  group_by(bay_year, habitat, type) %>%
+  mutate(total = sum(abundance)) %>%
+  ungroup(bay_year, habitat, type, total, species_scientific) %>%
+  group_by(bay_year, habitat, type, total, species_scientific) %>%
+  dplyr::summarize(abundance.prop = sum(abundance)/total) %>%
+  ungroup() %>%
+  dplyr::select(-total) %>%
+  distinct() %>%
+  pivot_wider(., names_from = "species_scientific", values_from = abundance.prop, values_fn = sum,
+              values_fill = 0)
+
+# pivot edna wider, we want to keep each biological replicates seperate
+edna.wide <- edna.red %>%
+  dplyr::select(alternative_ID, habitat, type, Species, raw.mean, bay_year) %>%
+  distinct() %>%
+  dplyr::rename(bay_year2 = bay_year, 
+                bay_year = alternative_ID) %>%
+  pivot_wider(., names_from = "Species", values_from = raw.mean, values_fn = sum, values_fill = 0) %>%
+  mutate_if(is.numeric, ~replace(., is.na(.), 0))
+
+edna.long <- pivot_longer(edna.wide, cols = c("Ammodytes personatus":"Clupea pallasii"))
+
+
+table(edna.red$raw.mean < 0.00000005)
+table(edna.red$raw.mean == 0) # no occurrences of 0
+```
+
+```{r}
+# bring together
+wide <- edna.wide %>%
+  mutate(habitat = ifelse(bay_year2 %in% c("ROSA_A_2022", "TRIS_A_2022"), "mixed", habitat), 
+         habitat = ifelse(bay_year2 == "SFEI_A_2022", "eelgrass", habitat)) %>%
+  dplyr::select(-bay_year2) %>%
+  rbind(seine.wide) %>%
+  mutate(habitat = ifelse(bay_year == "BLAQ_A_2022", "mixed", habitat),
+         habitat = ifelse(bay_year == "SFEI_A_2022", "eelgrass", habitat)) %>%
+  column_to_rownames(var = "bay_year") %>%
+  dplyr::select(-c(habitat, type))
+
+long <- wide %>%
+  rownames_to_column(var = "bay_year") %>%
+  pivot_longer(., cols = c("Ammodytes personatus":"Clupea pallasii"), names_to = "species_scientific",
+             values_to = "value") 
+
+eel.wide <- edna.wide %>%
+  dplyr::select(-bay_year2) %>%
+  rbind(seine.wide) %>%
+  column_to_rownames(var = "bay_year") %>%
+  filter(habitat == "eelgrass") %>%
+  dplyr::select(-c(habitat, type))
+
+kelp.wide <- edna.wide %>%
+  dplyr::select(-bay_year2) %>%
+  rbind(seine.wide) %>%
+  column_to_rownames(var = "bay_year") %>%
+  filter(habitat == "kelp") %>%
+  dplyr::select(-c(habitat, type))
+
+mix.wide <- edna.wide %>%
+  dplyr::select(-bay_year2) %>%
+  rbind(seine.wide) %>%
+  column_to_rownames(var = "bay_year") %>%
+  filter(habitat == "mixed") %>%
+  dplyr::select(-c(habitat, type))
+```
+
+Create site info for both edna and seine data
+```{r}
+seine.info <- read.csv("Data/seine_biomass_at_edna_sites.csv") %>%
+  dplyr::select(c(bay_year, place_name, habitat, date, julian, latitude, longitude)) %>%
+  distinct() %>%
+  mutate(type = "seine",
+         bay_year2 = bay_year) 
+
+edna.info <- edna.wide %>%
+  dplyr::select(c(bay_year, bay_year2, habitat, type)) %>%
+  left_join(seine.info[c("bay_year", "place_name", "date", "julian", "latitude", "longitude")],
+            by = c("bay_year2" = "bay_year"))
+
+# check that info for each sample type matches up
+seine.info %>%
+  dplyr::select(-type) %>%
+  left_join(edna.info[c("bay_year", "bay_year2", "habitat")], by = c("bay_year" = "bay_year2", "habitat"))
+
+# add lat/lon place name and date to edna.info
+
+site.info <- edna.info %>%
+  #dplyr::select(-bay_year2) %>%
+  rbind(seine.info) %>%
+  mutate(date = mdy(date),
+         year = year(date)) 
+
+eel.info <- site.info %>%
+  filter(habitat == "eelgrass")
+
+kelp.info <- site.info %>%
+  filter(habitat == "kelp")
+
+mixed.info <- site.info %>%
+  filter(habitat == "mixed")
+```
+
+check that info matches the wide dataframe
+```{r}
+eel.wide %>%
+  rownames_to_column(var = "bay_year") %>%
+  anti_join(eel.info[c("bay_year")]) # missing rosa_a_1-3; tris_a_1-3, and blaq_a_2022 in info 
+
+kelp.wide %>%
+  rownames_to_column(var = "bay_year") %>%
+  anti_join(kelp.info[c("bay_year")]) # missing rosa_a_1-3; tris_a_1-3, and blaq_a_2022 in info 
+
+mix.wide %>%
+  rownames_to_column(var = "bay_year") %>%
+  anti_join(mixed.info[c("bay_year")]) # missing rosa_a_1-3; tris_a_1-3, and blaq_a_2022 in info 
 
 ```
 
 
+Check to make sure both look like they are in proportional space (each site adds to 1)
+```{r}
+long %>%
+  left_join(site.info) %>%
+  ggplot() +
+  geom_col(mapping = aes(x = bay_year, y = value, fill = species_scientific)) +
+  facet_wrap(~type)
+
+edna.long %>%
+  ggplot() +
+  geom_col(mapping = aes(x = bay_year, y = value, fill = name)) +
+  theme(axis.text.x = element_text(angle = 45))
+
+richness <- apply(edna.wide[,(5:24)]>0, 1, sum) # what is the richness? 
+```
+
+## wisconsin standardizations
+```{r}
+std.wide <- wisconsin(wide)
+std.eel <- wisconsin(eel.wide)
+std.kelp <- wisconsin(kelp.wide)
+std.mix <- wisconsin(mix.wide)
+```
 
 
+## dissimilarity metrics
+### bray curtis
+```{r}
+bray.wide <- vegdist(std.wide, method = "bray")
+plot(bray.wide)
+
+bray.eel <- vegdist(std.eel, method = "bray")
+bray.kelp <- vegdist(std.kelp, method = "bray")
+bray.mix <- vegdist(std.mix, method = "bray")
+```
+
+### jaccard
+```{r}
+# change the value column to binary and then calc jaccard dissimilarity
+binary.wide <- long %>%
+  left_join(site.info) %>%
+  mutate(binary = ifelse(value > 0, 1, 0)) %>%
+  pivot_wider(id_cols = -c(value, habitat, type, place_name, date, julian,
+                           latitude, longitude), names_from = "species_scientific", values_from = binary) %>%
+  column_to_rownames("bay_year")
+
+# I dont believe we need to standardize binary data before calculating jaccard dissimilarity
+jacc.wide <- vegdist(binary.wide, method = "jaccard", binary = T)
+plot(jacc.wide)
+```
+
+
+## homogeneity of dispersion
+randomization test to compare within-group 'dispersions' with any distance measure. This tells you if the differences between sites are because of dispersion or variation or if it truly driven by a difference in sites (as can be determined by a PERMANOVA test)
+
+Both betadisper tests are significant indicating significant within group dispersion. 
+This somewhat makes sense because each group contains the same sites just sampled with different methods
+```{r}
+disp.type <- betadisper(bray.wide, site.info$type)
+anova(disp.type) 
+# H0 accepted (marginally); within group dispersion neglible 
+
+disp.hab <- betadisper(bray.wide, site.info$habitat)
+anova(disp.hab) 
+#H0 accepted
+
+disp.year <- betadisper(bray.wide, site.info$year)
+anova(disp.year) 
+#H0 accepted
+
+disp.type.bin <- betadisper(jacc.wide, site.info$type)
+anova(disp.type.bin)
+#H0 regected; which makes sense because all the binary values for edna is all 1 (no 0s)
+
+# habitat specific betadisper testing
+disp.eel.type <- betadisper(bray.eel, eel.info$type)
+anova(disp.eel.type)
+# H0 accepted
+
+disp.kelp.type <- betadisper(bray.kelp, kelp.info$type)
+anova(disp.kelp.type)
+#H0 regected
+
+disp.mix.type <- betadisper(bray.mix, mixed.info$type)
+anova(disp.mix.type)
+# H0 rejected
+```
+
+## permanova
+
+```{r}
+adonis2(bray.wide ~ habitat * type, data = site.info, 
+        by = "margin", perm = 999)
+# significant interaction term (pvalue = 0.026)
+adonis2(bray.wide ~ habitat * type + bay_year2,
+        by = "margin", data = site.info)
+# significant impact of site (p = 0.001) and habitat by type (p = 0.002)
+
+# blocks
+perm <- how(nperm = 999)
+setBlocks <- with(site.info, bay_year2)
+adonis2(bray.wide ~ habitat * type, by = "margin", 
+        permutation = perm, data = site.info)
+# there is a significant interaction of habitat by type (pvalue = 0.037)
+```
+
+### pairwise difference
+We may want to test if all groups are different from each other
+ (pairwise tests of differences among groups)
+ ‘adonis’ does not automatically test for pairwise differences, and does
+ not have an ‘ad hoc’ test to do so, hence we would have to test for
+ pairwise differences individually by selecting each pair:
+```{r}
+# for habitat by type
+
+
+# There are 6 possible pairs (identified here via ‘combn’):
+site.info$habitat <- as.factor(site.info$habitat)
+site.info$type <- as.factor(site.info$type)
+site.info <- unite(site.info, col = "intx", c(habitat:type), sep = "_", remove = F) %>%
+  mutate(intx = as.factor(intx))
+# Pairwise tests:
+#(pairs <- combn(levels(site.info$intx), 2))
+
+(pairs <- pairs[,c(1, 2,4,7,9,11,14, 10, 15)]) # we only care about a subset (2) of these possible pairs
+# Pairwise tests: 
+p.val <- rep(NA,9)  # Set up vector to hold pairwise p-values
+for(i in 1:9) {
+  pr <- pairs[,i]
+  sub <- is.element(site.info$intx, pr)
+  d.pair <- vegdist(std.wide[sub,], method = "bray")
+  cat("\n\nComparing", pr, ":\n")
+  print(fit <-adonis2(d.pair ~ intx, data=site.info[sub,], perm=1999, by = "margin"))
+  p.val[i] <- fit[1,5]  # Save p-values
+  names(p.val)[i] <- paste(pr[1], "-", pr[2], sep="")
+}
+
+p.val # p.val for the three informative pairwise values
+#### comparisons of same habitat and different gear types
+# eelgrass seine versus edna - significantly diff
+# kelp seine versus edna - significantly diff
+# mixed seine versus edna - significantly diff
+
+#### comparison of different habitat and same gear types
+# edna eelgrass versus kelp - significantly diff
+# edna eelgrass versus mixed - significantly diff (0.044)
+# edna mixed versus kelp - significantly diff 
+# seine eelgrass versus kelp - NOT significantly diff
+# seine eelgrass versus mixed - NOT significantly diff
+# seine mixed versus kelp - NOT significantly diff
+```
+
+
+#visualize
+## nmds
+```{r}
+nmds <- metaMDS(bray.wide, k = 2, autotransform = FALSE, trymax = 999)
+nmds$stres # higher stress 25%; not the best fit in two dimensions
+stressplot(nmds) # not the most idea... 
+
+# quick fun plot
+# plot the data
+par(mfrow=c(1,1))
+ordiplot(nmds, display = "site", type = "p", cex=1,)
+ordiellipse(nmds, site.info$intx)
+```
+
+
+```{r}
+# extract scores from the nmds
+scrs <- as.data.frame(scores(nmds, display = 'sites'))
+scrs <- cbind(as.data.frame(scrs), intx = site.info$intx)
+cent <- aggregate(cbind(NMDS1, NMDS2) ~ intx, data =scrs, FUN = mean)
+segs <- merge(scrs, setNames(cent, c('intx', 'oNMDS1', 'oNMDS2')),
+              by = "intx", sort = FALSE)
+
+# create species vectors correlated w/ nmds axis
+vec.sp <- envfit(nmds$points, std.wide[,1:20], perm = 999)
+vec.sp.arrows <- scores(vec.sp, display = "vectors")
+vec.sp.dat <- data.frame(vec.sp.arrows)
+vec.sp.dat$pvals <- vec.sp$vectors$pvals
+vec.sp.dat$sp_code <- row.names(vec.sp.dat)
+vec.sp.dat$r2 <- vec.sp$vectors$r
+
+# filter by species that are sig correlated w/ nmds axis
+vec.sp.dat.sig <- vec.sp.dat %>%
+  filter(pvals < 0.01)
+
+#vec.sp.dat.sig <- vec.sp.dat.sig %>%
+#  dplyr::select(MDS1, MDS2, pvals, sp_code, r2, sp_code) 
+
+# scale by nmds? 
+scalefactor <- min(max(scrs$NMDS1) - min(scrs$NMDS1), max(scrs$NMDS2) - min(scrs$NMDS2))
+vec.sp.dat.sig$MDS1_sc <- vec.sp.dat.sig$MDS1 * (scalefactor * vec.sp.dat.sig$r2)
+vec.sp.dat.sig$MDS2_sc <- vec.sp.dat.sig$MDS2 * (scalefactor * vec.sp.dat.sig$r2)
+```
+
+Reminder that this nmds is not well represented in two dimensions and that we should really be looking at three dimensions to get a sense of the variability in the data. 
+Try re positioning in three dimensions and then plotting. There's a chance that the variability between habitat type and gear type will be more visible in three? 
+```{r}
+scrs <- scrs %>%
+  separate(intx, into = c("habitat", "type"), remove = F)
+
+ggplot() +
+  geom_point(data = scrs, aes(x = NMDS1, y = NMDS2, color = as.factor(habitat), shape = as.factor(type))) +
+  stat_ellipse(data = scrs, aes(x = NMDS1, y = NMDS2, color = as.factor(type))) +
+  ggtitle("Nearshore fish community") +
+  labs(x = "NMDS1", y = "NMDS2", size = 10)+ 
+  geom_segment(data = vec.sp.dat.sig, aes(x = 0, xend = MDS1_sc, y = 0, yend = MDS2_sc),
+               inherit.aes=FALSE) +  # add arrows
+  geom_label_repel(data = vec.sp.dat.sig, aes(x = MDS1_sc, y = MDS2_sc, label = sp_code), 
+                   size = 4, inherit.aes = FALSE) 
+
+ggplot() +
+  geom_point(data = scrs, aes(x = NMDS1, y = NMDS2, color = as.factor(intx))) +
+  stat_ellipse(data = scrs, aes(x = NMDS1, y = NMDS2, color = as.factor(intx)), linewidth = 2) +
+  ggtitle("Nearshore fish community") +
+  labs(x = "NMDS1", y = "NMDS2", size = 10)+ 
+  geom_segment(data = vec.sp.dat.sig, aes(x = 0, xend = MDS1_sc, y = 0, yend = MDS2_sc),
+               inherit.aes=FALSE) +  # add arrows
+  geom_label_repel(data = vec.sp.dat.sig, aes(x = MDS1_sc, y = MDS2_sc, label = sp_code), 
+                   size = 4, inherit.aes = FALSE) 
+```
+
+## pcoa
 
 
