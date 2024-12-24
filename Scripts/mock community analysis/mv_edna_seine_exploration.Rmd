@@ -37,6 +37,25 @@ library(ggrepel)
 library(vegan)
 ```
 
+# custom fxn
+```{r theme settings, include=FALSE}
+# Creates custom base plot theme that can adjust every graph that you use plot_theme for!
+
+plot_theme <- function() {
+  theme_bw(base_size = 20, base_family = "Avenir") %+replace%
+    theme(panel.background  = element_blank(),
+            plot.background = element_rect(fill="white", colour=NA), 
+            legend.background = element_rect(fill="transparent", colour=NA),
+            legend.key = element_rect(fill="transparent", colour=NA),
+            panel.grid.major = element_blank(), 
+            panel.grid.minor = element_blank(),
+            strip.background = element_rect(colour = "NA", fill = "grey96"))
+}
+
+# to use ggsave and export plots include argument 'device=cario_pdf' e.g.: 
+# ggsave("name.pdf", device=cairo_pdf, width = 6, height = 6)
+```
+
 # data
 ```{r}
 # pull data from Kim's repository that we cloned and placed on our desktop - so if Kim makes any updates to the quant model that was used to generate these data them we need to pull it again
@@ -325,6 +344,7 @@ setBlocks <- with(site.info, bay_year2)
 adonis2(bray.wide ~ habitat * type, by = "margin", 
         permutation = perm, data = site.info)
 # there is a significant interaction of habitat by type (pvalue = 0.037)
+
 ```
 
 ### pairwise difference
@@ -488,8 +508,26 @@ vec.sp.dat.sig3 <- vec.sp.dat3 %>%
 
 ```
 3D spiner
+This isn't that helpful to look at. And for some reason the ellipses aren't showing up in the correct colors. 
 ```{r}
-ordirgl(nmds3, envfit = vec.sp3) 
+vegan3d::ordirgl(nmds3$points,
+                 choices = 1:3, 
+                 col = c("#FF0000", "#FFFF00", "#00FF00", "#00FFFF", "#0000FF", "#FF00FF")[(site.info$intx)]) 
+legend3d("topright", legend = unique(site.info$intx), 
+         pch = 16,
+         col = c("#FF0000", "#FFFF00", "#00FF00", "#00FFFF", "#0000FF", "#FF00FF"))
+
+
+
+
+# looking at the elipse
+vegan3d::ordirgl(nmds3$points,
+                 choices = 1:3, 
+                 col = rainbow(6)[as.numeric(site.info$intx)]) 
+vegan3d::orglellipse(nmds3$points, 
+                     display = "sites", 
+                     groups = site.info$intx, 
+                     col = rainbow(6)[as.numeric(site.info$intx)])
 ```
 
 
@@ -503,42 +541,203 @@ scrs3 <- scrs3 %>%
 
 scrs.edna <- scrs3 %>%
   filter(type == "edna")
+```
 
-ggplot() +
-  geom_point(data = scrs3, aes(x = NMDS1, y = NMDS2, color = as.factor(habitat), shape = as.factor(type))) +
-  stat_ellipse(data = scrs3, aes(x = NMDS1, y = NMDS2, color = as.factor(type))) +
-  ggtitle("Nearshore fish community") +
-  labs(x = "NMDS1", y = "NMDS2", size = 10)+ 
-  geom_polygon(data = scrs.edna, aes(x = NMDS1, y = NMDS2, group = bay_year2), fill = NA, color = "gray") +
+
+```{r}
+p1 <- ggplot() +
+    geom_point(data = scrs3, aes(x = NMDS1, y = NMDS3, 
+                               color = as.factor(habitat), shape = as.factor(type)),
+             size = 2) +
+  stat_ellipse(data = scrs3, aes(x = NMDS1, y = NMDS3, linetype = as.factor(type)),
+               size = 2) +
+  geom_polygon(data = scrs.edna, aes(x = NMDS1, y = NMDS3, group = bay_year2), 
+               fill = "lightgray", color = "gray", alpha = 0.4) +
   geom_segment(data = vec.sp.dat.sig3, aes(x = 0, xend = MDS1, y = 0, yend = MDS2),
                inherit.aes=FALSE) +  # add arrows
-  geom_label_repel(data = vec.sp.dat.sig3, aes(x = MDS1, y = MDS2, label = sp_code),
-                   size = 4, inherit.aes = FALSE)
+  geom_label_repel(data = vec.sp.dat.sig3, 
+                   aes(x = MDS1, y = MDS2, label = sp_code),
+                   size = 4, inherit.aes = FALSE) +
+  coord_fixed() +
+  scale_shape_manual(name = "Gear Type", 
+                     labels = c("eDNA", "Beach seine"),
+                     values = c("circle", "triangle")) +
+  scale_linetype_manual(name = "Gear Type",
+                     labels = c("eDNA", "Beach seine"),
+                     values = c("solid", "dashed")) +
+  scale_color_manual(name = "Habitat",
+                     labels = c("Eelgrass", "Understory kelp", "Mixed eelgrass"),
+                     values = c("#73A580","#D16103", "#E1AD01")) +
+  labs(x = "NMDS1", y = "NMDS2") +
+  plot_theme() +
+  guides(shape = guide_legend(override.aes = list(size = 3)),
+         color = guide_legend(override.aes = list(size = 3))) +  
+  theme(legend.key.width = unit(2, "cm"))
 
-ggplot() +
-  geom_point(data = scrs3, aes(x = NMDS1, y = NMDS3, color = as.factor(habitat), shape = as.factor(type))) +
-  stat_ellipse(data = scrs3, aes(x = NMDS1, y = NMDS3, color = as.factor(type))) +
-  ggtitle("Nearshore fish community") +
-  labs(x = "NMDS1", y = "NMDS3", size = 10)+ 
-  geom_polygon(data = scrs.edna, aes(x = NMDS1, y = NMDS3, group = bay_year2), fill = NA, color = "gray") +
+p2 <- ggplot() +
+    geom_point(data = scrs3, aes(x = NMDS1, y = NMDS3, 
+                               color = as.factor(habitat), shape = as.factor(type)),
+             size = 2) +
+  stat_ellipse(data = scrs3, aes(x = NMDS1, y = NMDS3, linetype = as.factor(type)),
+               size = 2) +
+  geom_polygon(data = scrs.edna, aes(x = NMDS1, y = NMDS3, group = bay_year2), 
+               fill = "lightgray", color = "gray", alpha = 0.4) +
   geom_segment(data = vec.sp.dat.sig3, aes(x = 0, xend = MDS1, y = 0, yend = MDS3),
                inherit.aes=FALSE) +  # add arrows
   geom_label_repel(data = vec.sp.dat.sig3, aes(x = MDS1, y = MDS3, label = sp_code), 
-                   size = 4, inherit.aes = FALSE) 
+                   size = 4, inherit.aes = FALSE) +
+  coord_fixed() +
+  scale_shape_manual(name = "Gear Type", 
+                     labels = c("eDNA", "Beach seine"),
+                     values = c("circle", "triangle")) +
+  scale_linetype_manual(name = "Gear Type",
+                     labels = c("eDNA", "Beach seine"),
+                     values = c("solid", "dashed")) +
+  scale_color_manual(name = "Habitat",
+                     labels = c("Eelgrass", "Understory kelp", "Mixed eelgrass"),
+                     values = c("#73A580","#D16103", "#E1AD01")) +
+  labs(x = "NMDS1", y = "NMDS3") +
+  plot_theme() +
+  guides(shape = guide_legend(override.aes = list(size = 3)),
+         color = guide_legend(override.aes = list(size = 3))) +
+  theme(legend.key.width = unit(2, "cm")) 
 
-ggplot() +
-  geom_point(data = scrs3, aes(x = NMDS2, y = NMDS3, color = as.factor(habitat), shape = as.factor(type))) +
-  stat_ellipse(data = scrs3, aes(x = NMDS2, y = NMDS3, color = as.factor(type))) +
-  ggtitle("Nearshore fish community") +
-  labs(x = "NMDS2", y = "NMDS3", size = 10)+ 
-  geom_polygon(data = scrs.edna, aes(x = NMDS2, y = NMDS3, group = bay_year2), fill = NA, color = "gray") +
+p3 <- ggplot() +
+    geom_point(data = scrs3, aes(x = NMDS1, y = NMDS3, 
+                               color = as.factor(habitat), shape = as.factor(type)),
+             size = 2) +
+  stat_ellipse(data = scrs3, aes(x = NMDS1, y = NMDS3, linetype = as.factor(type)),
+               size = 2) +
+  geom_polygon(data = scrs.edna, aes(x = NMDS1, y = NMDS3, group = bay_year2), 
+               fill = "lightgray", color = "gray", alpha = 0.4) +
   geom_segment(data = vec.sp.dat.sig3, aes(x = 0, xend = MDS2, y = 0, yend = MDS3),
                inherit.aes=FALSE) +  # add arrows
   geom_label_repel(data = vec.sp.dat.sig3, aes(x = MDS2, y = MDS3, label = sp_code), 
-                   size = 4, inherit.aes = FALSE) 
+                   size = 4, inherit.aes = FALSE) +
+  scale_shape_manual(name = "Gear Type", 
+                     labels = c("eDNA", "Beach seine"),
+                     values = c("circle", "triangle")) +
+  scale_linetype_manual(name = "Gear Type",
+                     labels = c("eDNA", "Beach seine"),
+                     values = c("solid", "dashed")) +
+  scale_color_manual(name = "Habitat",
+                     labels = c("Eelgrass", "Understory kelp", "Mixed eelgrass"),
+                     values = c("#73A580","#D16103", "#E1AD01")) +
+  labs(x = "NMDS2", y = "NMDS3") +
+  plot_theme() +
+  guides(shape = guide_legend(override.aes = list(size = 3)),
+         color = guide_legend(override.aes = list(size = 3))) +
+  theme(legend.key.width = unit(2, "cm"))
+        
+library(patchwork)
 
+plot_species <- p1 + p2 + p3 + guide_area() +
+  plot_layout(guides = "collect", ncol = 2) +
+  plot_annotation(tag_levels = "a")
+
+
+# ggsave(plot_species, filename = "Images/seine_eDNA_comparison_nmds_species.png",
+#        width = 14, height = 14)
 ```
 
+#### 3 axes w/o species
+remake without the species vectors
+```{r}
+p4 <- ggplot() +
+    geom_point(data = scrs3, aes(x = NMDS1, y = NMDS3, 
+                               color = as.factor(habitat), shape = as.factor(type)),
+             size = 2) +
+  stat_ellipse(data = scrs3, aes(x = NMDS1, y = NMDS3, linetype = as.factor(type)),
+               size = 2) +
+  geom_polygon(data = scrs.edna, aes(x = NMDS1, y = NMDS3, group = bay_year2), 
+               fill = "lightgray", color = "gray", alpha = 0.4) +
+  # geom_segment(data = vec.sp.dat.sig3, aes(x = 0, xend = MDS1, y = 0, yend = MDS2),
+  #              inherit.aes=FALSE) +  # add arrows
+  # geom_label_repel(data = vec.sp.dat.sig3, 
+  #                  aes(x = MDS1, y = MDS2, label = sp_code),
+  #                  size = 4, inherit.aes = FALSE) +
+  coord_fixed() +
+  scale_shape_manual(name = "Gear Type", 
+                     labels = c("eDNA", "Beach seine"),
+                     values = c("circle", "triangle")) +
+  scale_linetype_manual(name = "Gear Type",
+                     labels = c("eDNA", "Beach seine"),
+                     values = c("solid", "dashed")) +
+  scale_color_manual(name = "Habitat",
+                     labels = c("Eelgrass", "Understory kelp", "Mixed eelgrass"),
+                     values = c("#73A580","#D16103", "#E1AD01")) +
+  labs(x = "NMDS1", y = "NMDS2") +
+  plot_theme() +
+  guides(shape = guide_legend(override.aes = list(size = 3)),
+         color = guide_legend(override.aes = list(size = 3))) +  
+  theme(legend.key.width = unit(2, "cm"))
+
+p5 <- ggplot() +
+    geom_point(data = scrs3, aes(x = NMDS1, y = NMDS3, 
+                               color = as.factor(habitat), shape = as.factor(type)),
+             size = 2) +
+  stat_ellipse(data = scrs3, aes(x = NMDS1, y = NMDS3, linetype = as.factor(type)),
+               size = 2) +
+  geom_polygon(data = scrs.edna, aes(x = NMDS1, y = NMDS3, group = bay_year2), 
+               fill = "lightgray", color = "gray", alpha = 0.4) +
+  # geom_segment(data = vec.sp.dat.sig3, aes(x = 0, xend = MDS1, y = 0, yend = MDS3),
+  #              inherit.aes=FALSE) +  # add arrows
+  # geom_label_repel(data = vec.sp.dat.sig3, aes(x = MDS1, y = MDS3, label = sp_code), 
+  #                  size = 4, inherit.aes = FALSE) +
+  coord_fixed() +
+  scale_shape_manual(name = "Gear Type", 
+                     labels = c("eDNA", "Beach seine"),
+                     values = c("circle", "triangle")) +
+  scale_linetype_manual(name = "Gear Type",
+                     labels = c("eDNA", "Beach seine"),
+                     values = c("solid", "dashed")) +
+  scale_color_manual(name = "Habitat",
+                     labels = c("Eelgrass", "Understory kelp", "Mixed eelgrass"),
+                     values = c("#73A580","#D16103", "#E1AD01")) +
+  labs(x = "NMDS1", y = "NMDS3") +
+  plot_theme() +
+  guides(shape = guide_legend(override.aes = list(size = 3)),
+         color = guide_legend(override.aes = list(size = 3))) +
+  theme(legend.key.width = unit(2, "cm")) 
+
+p6 <- ggplot() +
+    geom_point(data = scrs3, aes(x = NMDS1, y = NMDS3, 
+                               color = as.factor(habitat), shape = as.factor(type)),
+             size = 2) +
+  stat_ellipse(data = scrs3, aes(x = NMDS1, y = NMDS3, linetype = as.factor(type)),
+               size = 2) +
+  geom_polygon(data = scrs.edna, aes(x = NMDS1, y = NMDS3, group = bay_year2), 
+               fill = "lightgray", color = "gray", alpha = 0.4) +
+  # geom_segment(data = vec.sp.dat.sig3, aes(x = 0, xend = MDS2, y = 0, yend = MDS3),
+  #              inherit.aes=FALSE) +  # add arrows
+  # geom_label_repel(data = vec.sp.dat.sig3, aes(x = MDS2, y = MDS3, label = sp_code), 
+  #                  size = 4, inherit.aes = FALSE) +
+  scale_shape_manual(name = "Gear Type", 
+                     labels = c("eDNA", "Beach seine"),
+                     values = c("circle", "triangle")) +
+  scale_linetype_manual(name = "Gear Type",
+                     labels = c("eDNA", "Beach seine"),
+                     values = c("solid", "dashed")) +
+  scale_color_manual(name = "Habitat",
+                     labels = c("Eelgrass", "Understory kelp", "Mixed eelgrass"),
+                     values = c("#73A580","#D16103", "#E1AD01")) +
+  labs(x = "NMDS2", y = "NMDS3") +
+  plot_theme() +
+  guides(shape = guide_legend(override.aes = list(size = 3)),
+         color = guide_legend(override.aes = list(size = 3))) +
+  theme(legend.key.width = unit(2, "cm"))
+
+
+plot_novector <- p4 + p5 + p6 + guide_area() +
+  plot_layout(guides = "collect", ncol = 2) +
+  plot_annotation(tag_levels = "a")
+
+
+# ggsave(plot_novector, filename = "Images/seine_eDNA_comparison_nmds.png",
+#        width = 12, height = 12)
+```
+
+Eh this cluster analysis didn't seem that helpful
 ### cluster analysis? 
 ```{r}
 clust <- hclust(bray.wide, method = "ward.D2") # different cluster methods exist - see ?hclust for more, default is "complete" and uses the maximum distance instead of the avg dist. Ward tries to find compact spherical clusters "average" and uses the average identity of a cluste rto rep the cluster
@@ -565,5 +764,44 @@ dendro %>%
 
 
 ## pcoa
+```{r}
+pcoa.bray <- cmdscale(bray.wide, eig = T)
+colnames(pcoa.bray$points) <- c("pcoa1", "pcoa2")
+plot(pcoa.bray$points)
+
+percent_explained <- 100* pcoa.bray$eig/ sum(pcoa.bray$eig)
+pe <- format(round(percent_explained[1:2], digits = 1), nsmall = 1, trim = T)
+
+pcoalabs <- as.list(c(glue::glue("PCoA 1 ({pe[1]}%)"),
+          glue::glue("PcoA 2 ({pe[2]}%)")))
+
+
+pcoa <- pcoa.bray$points %>%
+  as_tibble(rownames = "bay_year") %>%
+  left_join(site.info) %>%
+  ggplot(aes(x = pcoa1, y = pcoa2, color = habitat, shape = type)) +
+  geom_point(size = 3) + 
+  stat_ellipse(aes(x = pcoa1, y = pcoa2, linetype = type, color = habitat),
+               linewidth = 2) +
+  # geom_polygon(aes(x = pcoa1, y = pcoa2, group = bay_year2),
+  #              fill = "lightgray", alpha = 0.6) +
+  scale_color_manual(name = "Habitat", 
+                     labels = c("Eelgrass", "Understory kelp", "Mixed eelgrass"),
+                     values = c("#73A580","#D16103", "#E1AD01")) +
+  scale_linetype_manual(name = "Gear Type", 
+                        labels = c("eDNA", "Beach seine"), 
+                        values = c("solid", "dashed")) +
+  scale_shape_manual(name = "Gear Type", 
+                     labels = c("eDNA", "Beach seine"),
+                     values = c("circle", "triangle")) +
+  #theme(legend.position = "none") +
+  labs(x = pcoalabs[[1]], y = pcoalabs[[2]]) +
+    plot_theme() +
+    theme(legend.key.width = unit(2, "cm"))
+
+#ggsave(filename = "Images/pcoa_edna-seine_bray.png", plot = pcoa,
+#       height = 8, width = 14)
+```
+
 
 
