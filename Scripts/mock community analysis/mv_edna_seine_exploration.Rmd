@@ -34,6 +34,7 @@ Steps:
 library(tidyverse)
 library(lubridate)
 library(ggrepel)
+library(vegan)
 ```
 
 # data
@@ -263,7 +264,7 @@ binary.wide <- long %>%
   left_join(site.info) %>%
   mutate(binary = ifelse(value > 0, 1, 0)) %>%
   pivot_wider(id_cols = -c(value, habitat, type, place_name, date, julian,
-                           latitude, longitude), names_from = "species_scientific", values_from = binary) %>%
+                           latitude, longitude, bay_year2,  year), names_from = "species_scientific", values_from = binary) %>%
   column_to_rownames("bay_year")
 
 # I dont believe we need to standardize binary data before calculating jaccard dissimilarity
@@ -342,9 +343,9 @@ site.info$type <- as.factor(site.info$type)
 site.info <- unite(site.info, col = "intx", c(habitat:type), sep = "_", remove = F) %>%
   mutate(intx = as.factor(intx))
 # Pairwise tests:
-#(pairs <- combn(levels(site.info$intx), 2))
+(pairs <- combn(levels(site.info$intx), 2))
 
-(pairs <- pairs[,c(1, 2,4,7,9,11,14, 10, 15)]) # we only care about a subset (2) of these possible pairs
+(pairs <- pairs[,c(1,2,4,7,9,11,14,10,15)]) # we only care about a subset (2) of these possible pairs
 # Pairwise tests: 
 p.val <- rep(NA,9)  # Set up vector to hold pairwise p-values
 for(i in 1:9) {
@@ -387,7 +388,7 @@ ordiplot(nmds, display = "site", type = "p", cex=1,)
 ordiellipse(nmds, site.info$intx)
 ```
 
-
+Extract scores
 ```{r}
 # extract scores from the nmds
 scrs <- as.data.frame(scores(nmds, display = 'sites'))
@@ -443,6 +444,125 @@ ggplot() +
   geom_label_repel(data = vec.sp.dat.sig, aes(x = MDS1_sc, y = MDS2_sc, label = sp_code), 
                    size = 4, inherit.aes = FALSE) 
 ```
+
+### 3 axes nmds
+nmds w/ three axes
+```{r}
+nmds3 <- metaMDS(bray.wide, k = 3, autotransform = FALSE, trymax = 999)
+nmds3$stres # stress acceptable at 17.7%
+stressplot(nmds3) # better...
+scores(nmds3)
+
+par(mfrow=c(1,1))
+ordiplot(nmds3, display = "site", type = "p", cex=1,)
+ordiellipse(nmds3, site.info$intx)
+```
+
+Extract scores
+```{r}
+# extract scores from the nmds
+scrs3 <- as.data.frame(scores(nmds3, display = 'sites'))
+scrs3 <- cbind(as.data.frame(scrs3), intx = site.info$intx)
+cent <- aggregate(cbind(NMDS1, NMDS2, NMDS3) ~ intx, data =scrs3, FUN = mean)
+segs <- merge(scrs3, setNames(cent, c('intx', 'oNMDS1', 'oNMDS2', 'oNMDS3')),
+              by = "intx", sort = FALSE)
+
+# create species vectors correlated w/ nmds axis
+vec.sp3 <- envfit(nmds3$points, std.wide[,1:20], perm = 999, 
+                  choices = 1:3) # choices 1:3  REQUIRED to have it run with all three axes (nmds1, nmds2, nmds3)
+vec.sp.arrows3 <- scores(vec.sp3, display = "vectors")
+vec.sp.dat3 <- data.frame(vec.sp.arrows3)
+vec.sp.dat3$pvals <- vec.sp3$vectors$pvals
+vec.sp.dat3$sp_code <- row.names(vec.sp.dat3)
+vec.sp.dat3$r2 <- vec.sp3$vectors$r
+
+# filter by species that are sig correlated w/ nmds axis
+vec.sp.dat.sig3 <- vec.sp.dat3 %>%
+  filter(pvals < 0.01)
+
+#vec.sp.dat.sig <- vec.sp.dat.sig %>%
+#  dplyr::select(MDS1, MDS2, pvals, sp_code, r2, sp_code) 
+
+# scale by nmds? This might've been done up above see 
+# https://stackoverflow.com/questions/14711470/plotting-envfit-vectors-vegan-package-in-ggplot2
+
+```
+3D spiner
+```{r}
+ordirgl(nmds3, envfit = vec.sp3) 
+```
+
+
+Reminder that this nmds is not well represented in two dimensions and that we should really be looking at three dimensions to get a sense of the variability in the data. 
+Try re positioning in three dimensions and then plotting. There's a chance that the variability between habitat type and gear type will be more visible in three? 
+```{r}
+scrs3 <- scrs3 %>%
+  separate(intx, into = c("habitat", "type"), remove = F) %>%
+  rownames_to_column(var = "bay_year") %>%
+  left_join(site.info, by = c("bay_year", "intx", "habitat", "type"))
+
+scrs.edna <- scrs3 %>%
+  filter(type == "edna")
+
+ggplot() +
+  geom_point(data = scrs3, aes(x = NMDS1, y = NMDS2, color = as.factor(habitat), shape = as.factor(type))) +
+  stat_ellipse(data = scrs3, aes(x = NMDS1, y = NMDS2, color = as.factor(type))) +
+  ggtitle("Nearshore fish community") +
+  labs(x = "NMDS1", y = "NMDS2", size = 10)+ 
+  geom_polygon(data = scrs.edna, aes(x = NMDS1, y = NMDS2, group = bay_year2), fill = NA, color = "gray") +
+  geom_segment(data = vec.sp.dat.sig3, aes(x = 0, xend = MDS1, y = 0, yend = MDS2),
+               inherit.aes=FALSE) +  # add arrows
+  geom_label_repel(data = vec.sp.dat.sig3, aes(x = MDS1, y = MDS2, label = sp_code),
+                   size = 4, inherit.aes = FALSE)
+
+ggplot() +
+  geom_point(data = scrs3, aes(x = NMDS1, y = NMDS3, color = as.factor(habitat), shape = as.factor(type))) +
+  stat_ellipse(data = scrs3, aes(x = NMDS1, y = NMDS3, color = as.factor(type))) +
+  ggtitle("Nearshore fish community") +
+  labs(x = "NMDS1", y = "NMDS3", size = 10)+ 
+  geom_polygon(data = scrs.edna, aes(x = NMDS1, y = NMDS3, group = bay_year2), fill = NA, color = "gray") +
+  geom_segment(data = vec.sp.dat.sig3, aes(x = 0, xend = MDS1, y = 0, yend = MDS3),
+               inherit.aes=FALSE) +  # add arrows
+  geom_label_repel(data = vec.sp.dat.sig3, aes(x = MDS1, y = MDS3, label = sp_code), 
+                   size = 4, inherit.aes = FALSE) 
+
+ggplot() +
+  geom_point(data = scrs3, aes(x = NMDS2, y = NMDS3, color = as.factor(habitat), shape = as.factor(type))) +
+  stat_ellipse(data = scrs3, aes(x = NMDS2, y = NMDS3, color = as.factor(type))) +
+  ggtitle("Nearshore fish community") +
+  labs(x = "NMDS2", y = "NMDS3", size = 10)+ 
+  geom_polygon(data = scrs.edna, aes(x = NMDS2, y = NMDS3, group = bay_year2), fill = NA, color = "gray") +
+  geom_segment(data = vec.sp.dat.sig3, aes(x = 0, xend = MDS2, y = 0, yend = MDS3),
+               inherit.aes=FALSE) +  # add arrows
+  geom_label_repel(data = vec.sp.dat.sig3, aes(x = MDS2, y = MDS3, label = sp_code), 
+                   size = 4, inherit.aes = FALSE) 
+
+```
+
+### cluster analysis? 
+```{r}
+clust <- hclust(bray.wide, method = "ward.D2") # different cluster methods exist - see ?hclust for more, default is "complete" and uses the maximum distance instead of the avg dist. Ward tries to find compact spherical clusters "average" and uses the average identity of a cluste rto rep the cluster
+
+
+plot(clust)
+
+# make it into a dendrogram
+dendro <- as.dendrogram(clust)
+
+library(dendextend)
+
+dendro %>%
+  set("leaves_pch", c(19)) %>%
+  set("leaves_cex", c(2)) %>%
+  set("labels_col", 
+      as.numeric(cutree(clust, k=3)[clust$order])+1) %>%
+  prune(c("1", "5")) %>%
+  plot(type = "rectangle") 
+
+dendro %>%
+  get_nodes_attr("members", id = c(2))
+```
+
 
 ## pcoa
 
