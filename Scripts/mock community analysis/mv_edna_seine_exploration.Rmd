@@ -68,6 +68,54 @@ plot_theme_small <- function() {
 }
 ```
 
+global label fxn 
+```{r}
+add_global_label <- function(pwobj, Xlab = NULL, Ylab = NULL, Xgap = 0.03, Ygap = 0.03, ...) {
+    ylabgrob <- patchwork::plot_spacer()
+    if (!is.null(Ylab)) {
+        ylabgrob <- ggplot() +
+            geom_text(aes(x = .5, y = .5), label = Ylab, angle = 90, ...) +
+            theme_void()
+    }
+    if (!is.null(Xlab)) {
+        xlabgrob <- ggplot() +
+            geom_text(aes(x = .5, y = .5), label = Xlab, ...) +
+            theme_void()
+    }
+    if (!is.null(Ylab) & is.null(Xlab)) {
+        return((ylabgrob + patchworkGrob(pwobj)) + 
+            patchwork::plot_layout(widths = 100 * c(Ygap, 1 - Ygap),
+                                   tag_level = "keep"))
+    }
+    if (is.null(Ylab) & !is.null(Xlab)) {
+        return((ylabgrob + pwobj) + 
+            (xlabgrob) +
+            patchwork::plot_layout(heights = 100 * c(1 - Xgap, Xgap),
+                                   widths = c(0, 100),
+                                   tag_level = "keep",
+                                   design = "
+                                   AB
+                                   CC
+                                   "
+            ))
+    }
+    if (!is.null(Ylab) & !is.null(Xlab)) {
+        return((ylabgrob + pwobj) + 
+            (xlabgrob) +
+            patchwork::plot_layout(heights = 100 * c(1 - Xgap, Xgap),
+                                   widths = 100 * c(Ygap, 1 - Ygap),
+                                   tag_level = "keep",
+                                   design = "
+                                   AB
+                                   CC
+                                   "
+            ))
+    }
+    return(pwobj)
+}
+```
+
+
 # data
 ```{r}
 # pull data from Kim's repository that we cloned and placed on our desktop - so if Kim makes any updates to the quant model that was used to generate these data them we need to pull it again
@@ -1771,6 +1819,7 @@ gear.simper <-
 Make average proportional graphs for the species that constitute a significant difference between the intx (from permanova)
 ```{r}
 habitat.plots <- list()
+abund.df <- list()
 # Habitat loop
 for(i in unique(habitat.simper$comparison)){
   dat <- filter(habitat.simper, comparison == i) %>%
@@ -1788,6 +1837,8 @@ for(i in unique(habitat.simper$comparison)){
     group_by(species_scientific, intx, habitat, type) %>%
     dplyr::summarize(avg = mean(value),
                      sd = sd(value))
+   full.dat <- left_join(abund, dat, by = "species_scientific")
+   abund.df[[i]] <- full.dat
   
    plot <- ggplot() +
     geom_col(aes(x = habitat, y = avg), data = abund, color = "black") +
@@ -1804,20 +1855,130 @@ for(i in unique(habitat.simper$comparison)){
 
 }
 
+design1 <- c(
+  area(1, 1, 1, 2),
+  area(1, 3, 1, 3),
+  area(2, 1, 2, 3)
+)
 
-edna.plots <- (habitat.plots[[1]] + habitat.plots[[2]]) / (habitat.plots[[3]]) 
-edna.plots + plot_layout(axes = "collect")
-
-h1 <- habitat.plots[[4]] 
-h2 <- habitat.plots[[5]]
-h3 <- habitat.plots[[6]]
-test <- h1 + h2 + plot_layout(axes = "collect")
-(test + h3) + plot_layout(axes = "collect")
+tplot <- habitat.plots[[1]] + habitat.plots[[2]] & 
+  theme(axis.title.x = element_blank())
+edna.plots <- tplot + habitat.plots[[3]] +
+  plot_layout(design = design1, axes = "collect") +
+  plot_annotation(tag_levels = "a")
 
 # ggsave(filename = "Images/eDNA_simper_habitat.png", width = 14, height = 10,
 #        plot = edna.plots)
+
+
+# because of how awkward the numbering comes out for the seine comparison of habitat we have to generate those plots seperately. so i'm using the abund.df list to do that
+
+h4 <- ggplot() +
+    geom_col(aes(x = habitat, y = avg), data = abund.df[[4]], color = "black") +
+    geom_errorbar(aes(x = habitat, ymin = avg, ymax = avg + sd.x), 
+                  width = 0.15, data = abund.df[[4]]) +
+    geom_text(data = abund.df[[4]], mapping = aes(x = Inf, y = Inf, label = label), 
+            inherit.aes = FALSE, hjust = 1.1, vjust = 1.4, size = 5) +
+    labs(x = NULL, y = NULL,
+         subtitle = "a") +
+    plot_theme_small() +
+    facet_wrap(~species_scientific, ncol = 6)
+
+h5 <- ggplot() +
+    geom_col(aes(x = habitat, y = avg), data = abund.df[[5]], color = "black") +
+    geom_errorbar(aes(x = habitat, ymin = avg, ymax = avg + sd.x), 
+                  width = 0.15, data = abund.df[[5]]) +
+    geom_text(data = abund.df[[5]], mapping = aes(x = Inf, y = Inf, label = label), 
+            inherit.aes = FALSE, hjust = 1.1, vjust = 1.4, size = 5) +
+    labs(x = NULL, y = NULL,
+         subtitle = "b") +
+    plot_theme_small() +
+    facet_wrap(~species_scientific, ncol = 6)
+
+h6 <- ggplot() +
+    geom_col(aes(x = habitat, y = avg), data = abund.df[[6]], color = "black") +
+    geom_errorbar(aes(x = habitat, ymin = avg, ymax = avg + sd.x), 
+                  width = 0.15, data = abund.df[[6]]) +
+    geom_text(data = abund.df[[6]], mapping = aes(x = Inf, y = Inf, label = label), 
+            inherit.aes = FALSE, hjust = 1.1, vjust = 1.4, size = 5) +
+    labs(x = NULL, y = NULL,
+         subtitle = "c") +
+    plot_theme_small() +
+    facet_wrap(~species_scientific, ncol = 6)
+
+design2 <- c(
+  area(1,1,1,1),
+  area(2,1,2,1),
+  area(3,1,4.8,1)
+)
+
+seine.plots1 <- (h4 / h5 / h6) + plot_layout(design = design2, axes = "collect") + plot_annotation(tag_levels = "a") &
+  theme(axis.title.y = element_blank())
+
+seine.plots <- add_global_label(seine.plots1, Ylab = "Average proportion",
+                                Xlab = "Habitat",
+                 size = 8) 
+
+
+# ggsave(filename = "Images/seine_simper_habitat.png", width = 19, height = 15,
+#        plot = seine.plots)
 ```
 
+seine habitat comparison but long instead of wide
+```{r}
+h4 <- ggplot() +
+    geom_col(aes(x = habitat, y = avg), data = abund.df[[4]], color = "black") +
+    geom_errorbar(aes(x = habitat, ymin = avg, ymax = avg + sd.x), 
+                  width = 0.15, data = abund.df[[4]]) +
+    geom_text(data = abund.df[[4]], mapping = aes(x = Inf, y = Inf, label = label), 
+            inherit.aes = FALSE, hjust = 1.1, vjust = 1.4, size = 5) +
+    labs(x = NULL, y = NULL,
+         #subtitle = "a"
+         ) +
+    plot_theme_small() +
+    facet_wrap(~species_scientific, ncol = 4)
+
+h5 <- ggplot() +
+    geom_col(aes(x = habitat, y = avg), data = abund.df[[5]], color = "black") +
+    geom_errorbar(aes(x = habitat, ymin = avg, ymax = avg + sd.x), 
+                  width = 0.15, data = abund.df[[5]]) +
+    geom_text(data = abund.df[[5]], mapping = aes(x = Inf, y = Inf, label = label), 
+            inherit.aes = FALSE, hjust = 1.1, vjust = 1.4, size = 5) +
+    labs(x = NULL, y = "Average proportion",
+         #subtitle = "b"
+         ) +
+    plot_theme_small() +
+    facet_wrap(~species_scientific, ncol = 4)
+
+h6 <- ggplot() +
+    geom_col(aes(x = habitat, y = avg), data = abund.df[[6]], color = "black") +
+    geom_errorbar(aes(x = habitat, ymin = avg, ymax = avg + sd.x), 
+                  width = 0.15, data = abund.df[[6]]) +
+    geom_text(data = abund.df[[6]], mapping = aes(x = Inf, y = Inf, label = label), 
+            inherit.aes = FALSE, hjust = 1.1, vjust = 1.4, size = 5) +
+    labs(x = "Habitat", y = NULL,
+         #subtitle = "c"
+         ) +
+    plot_theme_small() +
+    facet_wrap(~species_scientific, ncol = 4)
+
+design3 <- c(
+  area(1,1,2,1),
+  area(3,1,4,1),
+  area(5,1,6,1)
+)
+
+seine.plots.long <- (h4 / h5 / h6) + 
+  plot_layout(design = design3) +
+  plot_annotation(tag_levels = "a") &
+  theme(axis.title.x = element_text(size = 22),
+        axis.title.y = element_text(size = 22))
+
+
+
+ggsave(filename = "Images/seine_simper_habitat_long.png", width = 13, height = 16,
+       plot = seine.plots.long)
+```
 
 
 ## Jaccard 
