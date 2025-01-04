@@ -413,6 +413,9 @@ anova(disp.mix.type)
 ## permanova
 
 ```{r}
+###################################
+##### ABUNDANCE BASED PERMANOVA ###
+###################################
 adonis2(bray.wide ~ habitat * type, data = site.info, 
         by = "margin", perm = 999)
 # significant interaction term (pvalue = 0.026)
@@ -427,7 +430,9 @@ adonis2(bray.wide ~ habitat * type, by = "margin",
         permutation = perm, data = site.info)
 # there is a significant interaction of habitat by type (pvalue = 0.037)
 
-# binary permanova
+###############################
+###### BINARY PERMANOVA #######
+###############################
 adonis2(jacc.wide ~ habitat * type, data = site.info,
         by = "margin", perm = 999)
 # no significant intx 
@@ -1817,9 +1822,11 @@ gear.simper <-
 ```
 
 Make average proportional graphs for the species that constitute a significant difference between the intx (from permanova)
+###Simper habitat 
 ```{r}
 habitat.plots <- list()
 abund.df <- list()
+#i <- "eelgrass_edna_kelp_edna"
 # Habitat loop
 for(i in unique(habitat.simper$comparison)){
   dat <- filter(habitat.simper, comparison == i) %>%
@@ -1840,16 +1847,16 @@ for(i in unique(habitat.simper$comparison)){
    full.dat <- left_join(abund, dat, by = "species_scientific")
    abund.df[[i]] <- full.dat
   
-   plot <- ggplot() +
-    geom_col(aes(x = habitat, y = avg), data = abund, color = "black") +
-    geom_errorbar(aes(x = habitat, ymin = avg, ymax = avg + sd), 
-                  width = 0.15, data = abund) +
-    geom_text(data = dat, mapping = aes(x = Inf, y = Inf, label = label), 
+   plot <- ggplot(full.dat) +
+    geom_col(aes(x = habitat, y = avg), color = "black") +
+    geom_errorbar(aes(x = habitat, ymin = avg, ymax = avg + sd.x),
+                  width = 0.15) +
+    geom_text(mapping = aes(x = Inf, y = Inf, label = label), 
             inherit.aes = FALSE, hjust = 1.1, vjust = 1.4, size = 5) +
     labs(x = "Habitat", y = "Average proportion") +
          #title = unique(dat$title)) +
     plot_theme_small() +
-    facet_wrap(~species_scientific)
+    facet_wrap(~reorder(species_scientific, -average))
    
    habitat.plots[[i]] <- plot
 
@@ -1882,7 +1889,7 @@ h4 <- ggplot() +
     labs(x = NULL, y = NULL,
          subtitle = "a") +
     plot_theme_small() +
-    facet_wrap(~species_scientific, ncol = 6)
+    facet_wrap(~reorder(species_scientific, -average), ncol = 6)
 
 h5 <- ggplot() +
     geom_col(aes(x = habitat, y = avg), data = abund.df[[5]], color = "black") +
@@ -1893,7 +1900,7 @@ h5 <- ggplot() +
     labs(x = NULL, y = NULL,
          subtitle = "b") +
     plot_theme_small() +
-    facet_wrap(~species_scientific, ncol = 6)
+    facet_wrap(~reorder(species_scientific, -average), ncol = 6)
 
 h6 <- ggplot() +
     geom_col(aes(x = habitat, y = avg), data = abund.df[[6]], color = "black") +
@@ -1904,7 +1911,7 @@ h6 <- ggplot() +
     labs(x = NULL, y = NULL,
          subtitle = "c") +
     plot_theme_small() +
-    facet_wrap(~species_scientific, ncol = 6)
+    facet_wrap(~reorder(species_scientific, -average), ncol = 6)
 
 design2 <- c(
   area(1,1,1,1),
@@ -1936,7 +1943,7 @@ h4 <- ggplot() +
          #subtitle = "a"
          ) +
     plot_theme_small() +
-    facet_wrap(~species_scientific, ncol = 4)
+    facet_wrap(~reorder(species_scientific, -average), ncol = 4)
 
 h5 <- ggplot() +
     geom_col(aes(x = habitat, y = avg), data = abund.df[[5]], color = "black") +
@@ -1948,7 +1955,7 @@ h5 <- ggplot() +
          #subtitle = "b"
          ) +
     plot_theme_small() +
-    facet_wrap(~species_scientific, ncol = 4)
+    facet_wrap(~reorder(species_scientific, -average), ncol = 4)
 
 h6 <- ggplot() +
     geom_col(aes(x = habitat, y = avg), data = abund.df[[6]], color = "black") +
@@ -1960,7 +1967,7 @@ h6 <- ggplot() +
          #subtitle = "c"
          ) +
     plot_theme_small() +
-    facet_wrap(~species_scientific, ncol = 4)
+    facet_wrap(~reorder(species_scientific, -average), ncol = 4)
 
 design3 <- c(
   area(1,1,2,1),
@@ -1976,12 +1983,248 @@ seine.plots.long <- (h4 / h5 / h6) +
 
 
 
-ggsave(filename = "Images/seine_simper_habitat_long.png", width = 13, height = 16,
-       plot = seine.plots.long)
+# ggsave(filename = "Images/seine_simper_habitat_long.png", width = 13, height = 16,
+#        plot = seine.plots.long)
+```
+### simper gear type
+```{r}
+gear.plots <- list()
+abund.type.df <- list()
+
+# Gear type loop
+for(i in unique(gear.simper$comparison)){
+  dat <- filter(gear.simper, comparison == i) %>%
+    separate(comparison, into = c("hab1", "type1", "hab2", "type2"), remove = F) %>%
+    mutate(species_scientific = sp_code)
+  
+  abund <- long %>%
+    left_join(site.info) %>%
+    filter(habitat %in% c(dat$hab1, dat$hab2),
+           type %in% c(dat$type1, dat$type2),
+           species_scientific %in% c(dat$sp_code)) %>%
+    mutate(habitat = ifelse(habitat == "eelgrass", "Eelgrass",
+                            ifelse(habitat == "mixed", "Mixed eelgrass",
+                                   ifelse(habitat == "kelp", "Understory kelp", habitat))),
+           type = ifelse(type == "seine", "Beach seine",
+                         ifelse(type == "edna", "eDNA", type))) %>%
+    group_by(species_scientific, intx, habitat, type) %>%
+    dplyr::summarize(avg = mean(value),
+                     sd = sd(value))
+  
+   full.dat <- left_join(abund, dat, by = "species_scientific")
+   abund.type.df[[i]] <- full.dat
+
+}
+
+
+g1 <- ggplot() +
+    geom_col(aes(x = type, y = avg), data = abund.type.df[[1]], color = "black") +
+    geom_errorbar(aes(x = type, ymin = avg, ymax = avg + sd.x), 
+                  width = 0.15, data = abund.type.df[[1]]) +
+    geom_text(data = abund.type.df[[1]], mapping = aes(x = Inf, y = Inf, label = label), 
+            inherit.aes = FALSE, hjust = 1.1, vjust = 1.4, size = 5) +
+    labs(x = NULL, y = NULL,
+         #title = unique(dat$title)
+         subtitle = "a) Eelgrass meadows"
+         ) +
+    plot_theme_small() +
+    facet_wrap(~reorder(species_scientific, -average))
+
+g2 <- ggplot() +
+    geom_col(aes(x = type, y = avg), data = abund.type.df[[2]], color = "black") +
+    geom_errorbar(aes(x = type, ymin = avg, ymax = avg + sd.x), 
+                  width = 0.15, data = abund.type.df[[2]]) +
+    geom_text(data = abund.type.df[[2]], mapping = aes(x = Inf, y = Inf, label = label), 
+            inherit.aes = FALSE, hjust = 1.1, vjust = 1.4, size = 5) +
+    labs(x = NULL, y = NULL,
+         #title = unique(dat$title)
+         subtitle = "b) Mixed eelgrass"
+         ) +
+    plot_theme_small() +
+    facet_wrap(~reorder(species_scientific, -average))
+
+g3 <- ggplot() +
+    geom_col(aes(x = type, y = avg), data = abund.type.df[[3]], color = "black") +
+    geom_errorbar(aes(x = type, ymin = avg, ymax = avg + sd.x), 
+                  width = 0.15, data = abund.type.df[[3]]) +
+    geom_text(data = abund.type.df[[3]], mapping = aes(x = Inf, y = Inf, label = label), 
+            inherit.aes = FALSE, hjust = 1.1, vjust = 1.4, size = 5) +
+    labs(x = NULL, y = NULL,
+         #title = unique(dat$title)
+         subtitle = "c) Understory kelp"
+         ) +
+    plot_theme_small() +
+    facet_wrap(~reorder(species_scientific, -average))
+
+
+
+
+design3 <- c(
+  area(1,1,2,1),
+  area(3,1,3,1),
+  area(1,2,3,2)
+)
+
+gear.plots1 <- (g1/ g2) + g3 +
+  plot_layout(design = design3)
+
+
+gear.plots <- add_global_label(gear.plots1, Ylab = "Average proportion",
+                 Xlab = "Gear type", size = 8, Xgap = 0.04)
+
+# ggsave(filename = "Images/gear_simper_allHabs.png", width = 16, height = 10,
+#        plot = gear.plots)
 ```
 
 
 ## Jaccard 
+```{r}
+# compare the results of the jaccard and bray curtis on binary data
+
+bin.bray <- vegdist(binary.wide, method = "bray", binary = T)
+jacc.wide <- vegdist(binary.wide, method = "jaccard", binary = T)
+bin.soren <- labdsv::dsvdis(binary.wide, index = "sorensen")
+
+table(bin.bray == jacc.wide) # okay CLEARLY jaccard distance and bracy curtis are NOT the same when its binary data (weird stuff online indicated this), but is sorenson the same? 
+table(bin.bray == bin.soren) # still not the same, but if you plot this they show up as identical...
+plot(bin.bray)
+plot(bin.soren)
+
+table(bin.soren == jacc.wide) # nope
+# more research suggests that they are *basically* the same thing, but don't produce the same values on identical data (but are closely related)
+
+# so another way of thinking of this; is that its a simper using the sorenson distance and/or bray-curtis with binary data. 
+# sincer sorenson dist is a legit application of binary data I'm going to go ahead and pursue this... note that while jaccard distance is a metric distance this (sorenson) is semimetric
+
+sim.binhab<- simper(binary.wide, site.info$habitat, permutations = 999)
+sum.bhab<- summary(sim.binhab)
+
+sim.bingear <- simper(binary.wide, site.info$type, permutations = 999)
+sum.bgear<- summary(sim.bingear)
+```
+
+I'm not positive if its statistically totally okay to use binary data with SIMPER analysis - but we're going to go ahead and use it (which is equavilent to the sorenson dist)
+
+simper contrasts
+```{r}
+c1 <- sum.bhab$eelgrass_kelp %>%
+  filter(p < 0.05) %>%
+  rownames_to_column("sp_code") %>%
+  mutate(comparison = "eelgrass_kelp",
+         title = "Habitat comparison")
+c2 <- sum.bhab$eelgrass_mixed %>%
+  filter(p < 0.05) %>%
+  rownames_to_column("sp_code") %>%
+  mutate(comparison = "eelgrass_mixed",
+         title = "Habitat comparison")
+c3 <- sum.bhab$kelp_mixed %>%
+  filter(p < 0.05) %>%
+  rownames_to_column("sp_code") %>%
+  mutate(comparison = "kelp_mixed",
+         title = "Habitat comparison")
+
+hab.constrast <- rbind(c1, c2) %>%
+  rbind(c3) %>%
+  mutate(average = round(average * 100, 2),
+         label = sprintf("%.1f%%", average))
+
+# create gear type constrasts
+gear.constrast <- sum.bgear$edna_seine %>%
+  filter(p < 0.05) %>%
+  rownames_to_column("sp_code") %>%
+  mutate(comparison = "edna_seine",
+         title = "Gear comparison") %>%
+  mutate(average = round(average * 100, 2),
+         label = sprintf("%.1f%%", average))
+
+binary.long <- binary.wide %>%
+  rownames_to_column(var = "bay_year") %>%
+  left_join(site.info) %>%
+  pivot_longer(cols = c("Ammodytes personatus":"Clupea pallasii"), 
+               names_to = "species_scientific", values_to = "binary") %>%
+  mutate(type = ifelse(type == "edna", "eDNA",
+                       ifelse(type == "seine", "Beach seine", type)))
+
+## average for the relevant species for gear constrasts
+bin.gear.plot <- binary.long %>%
+  subset(species_scientific %in% gear.constrast$sp_code) %>%
+  group_by(species_scientific, type) %>%
+  dplyr::summarise(avg = mean(binary),
+                   sd = sd(binary)) %>%
+  left_join(gear.constrast, by = c("species_scientific" = "sp_code")) %>%
+  ggplot() +
+    geom_col(aes(x = type, y = avg), color = "black") +
+    geom_errorbar(aes(x = type, ymin = avg, ymax = avg + sd.x), 
+                  width = 0.15) +
+    geom_text(mapping = aes(x = Inf, y = Inf, label = label), 
+            inherit.aes = FALSE, hjust = 1.1, vjust = 1.4, size = 5) +
+    labs(x = "Gear Type", y = NULL,
+         #subtitle = "c) Understory kelp"
+         ) +
+    ylim(0, 1.25) +
+    plot_theme_small() +
+    facet_wrap(~reorder(species_scientific, -average))
+
+```
+
+habitat constrasts
+
+```{r}
+simper.plots <- list()
+
+#i <- "eelgrass_kelp"
+for(i in unique(hab.constrast$comparison)) {
+  sp_sub <- filter(hab.constrast, comparison == i) %>%
+    separate(comparison, into = c("hab1", "hab2"), remove = F)
+  full.dat <- binary.long %>%
+     filter(habitat %in% c(sp_sub$hab1, sp_sub$hab2),
+           species_scientific %in% c(sp_sub$sp_code)) %>%
+    group_by(species_scientific, habitat) %>%
+    dplyr::summarise(avg = mean(binary),
+                     sd = sd(binary)) %>%
+     left_join(sp_sub, by = c("species_scientific" = "sp_code")) %>%
+    mutate(habitat = ifelse(habitat == "eelgrass", "Eelgrass",
+                          ifelse(habitat == "kelp", "Understory kelp",
+                                 ifelse(habitat == "mixed", "Mixed eelgrass", habitat))))
+  
+  hab.const.plot <- ggplot(full.dat) +
+    geom_col(aes(x = habitat, y = avg), color = "black") +
+    geom_errorbar(aes(x = habitat, ymin = avg, ymax = avg + sd.x), 
+                  width = 0.15) +
+    geom_text(mapping = aes(x = Inf, y = Inf, label = label), 
+            inherit.aes = FALSE, hjust = 1.1, vjust = 1.4, size = 5) +
+    labs(x = "Habitat", y = "Average P/A proportion",
+         subtitle = 
+         ) +
+    ylim(0, 1.25) +
+    plot_theme_small() +
+    facet_wrap(~reorder(species_scientific, -average))
+  
+  simper.plots[[i]] <- hab.const.plot
+}
+
+
+```
+
+bring gear and habitat contrasts together
+```{r}
+design4 <- c(
+  area(1,1,1,1),
+  area(2,1,2,1),
+  area(3,1,3,1),
+  area(1,2,3,2)
+)
+
+jacc_simper_both <- simper.plots[[1]] + simper.plots[[2]] + simper.plots[[3]] +
+  bin.gear.plot +
+  plot_layout(design = design4, axes = "collect") +
+  plot_annotation(tag_levels = "a")
+
+
+ggsave(filename = "Images/jaccard_simper_hab&gear.png", width = 19, height = 10,
+       plot = jacc_simper_both)
+
+```
 
 
 # Whole community
@@ -1997,6 +2240,9 @@ edna.com <- read.csv("Data/all_taxa_simple_20241219.csv") %>%
   dplyr::select(-c(X, bottle))
 
 unique(edna.com$taxon)
+seine.ordered  <- seine %>%
+  arrange(species_scientific)
+unique(seine.ordered$species_scientific) 
 ```
 
 ```{r}
@@ -2015,5 +2261,50 @@ unique(edna.com$taxon)
 #' Sebastes 1, 2, 3 (by groups)
 #' Sebastes entomelas (Widow rockfish)
 #' Sebastes nigrocinctus (tiger rockfish)
+```
+
+Questionable species: 
+Embiotoca lateralis (Striped surfperch); although shows up in Wrangell
+Hypomesus (genus of smelts), includes: surf, pon, japanese, delta smelt
+Micropterus (genus of freshwater fish, black bass); game fish introduced 13 known species
+
+```{r}
+Artedius <- c("Artedius fenestralis", "Artedius harringtoni",
+              "Artedius lateralis", "Artedius spp.")
+
+# Hexagrammos <- c("Hexagrammos", "Hexagrammos decagrammus", 
+#                  "Hexagrammos octogrammus", "Hexagrammos lagocephalus",
+#                  "Hexagrammos stelleri")
+# 
+# 
+# Myox <- c("Myoxocephalus", "Myoxocephalus jaok", "Myoxocephalus polyacanthocephalus",
+#           "Myoxocephalus quadricornis", "Myoxocephalus scorpioides",
+#           "Myoxocephalus scorpius", "Myoxocephalus sinensis", 
+#           "Myoxocephalus stelleri") # there are more but these are the ones I think common or that show up in the seine. 
+# 
+# Oncorhynchus <- c("Oncorhynchus clarkii", "Oncorhynchus gorbuscha", 
+#                   "Oncorhynchus keta", "Oncorhynchus kisutch", 
+#                   "Oncorhynchus tshawytscha", "Oncorhynchus nerka",
+#                   "Oncorhynchus")
+# 
+# Salvelinus <- c("Salvelinus alpinus", "Salvelinus namaycush", "Salvelinus malma", 
+#                 "Salvelinus confluentus", "Salvelinus fontinalis")
+# 
+# Sebastes1 <- c()
+# Sebastes2 <- c()
+# Sebastes3 <- c()
+# 
+# Sebastolobus <- c("Sebastolobus alascanus", "Sebastolobus altivelis",
+#                   "Sebastolobus macrochir")
+
+Stichaeidae <- c("Xiphister", "Anoplarchus insignis", "Anoplarchus",
+                 "Anoplarchus purpurescens", "Lumpenus sagitta", "Stichaeus punctatus")
+
+Hemilepidotus <- c("Hemilepidotus sp.", "Hemilepidotus hemilepidotus",
+                   "Hemilepidotus spinosus")
+
+Lepidopsetta <- c("Lepidopsetta", "Lepidopsetta bilineata", "Lepidopsetta polyxystra",
+                  "Lepidopsetta mochigarei", "Lepidopsetta spp.") # northern & rock sole & dusty sole
+
 ```
 
