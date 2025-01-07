@@ -2226,6 +2226,197 @@ ggsave(filename = "Images/jaccard_simper_hab&gear.png", width = 19, height = 10,
 
 ```
 
+# Indicator analysis
+## abundance based
+This is following a tutorial from a UW course https://uw.pressbooks.pub/appliedmultivariatestatistics/chapter/isa/ and talks about classical versus modified indicator analysis with the main difference being if the indicator species are for a single group (e.g. for habitat just eelgrass) or for a combination of groups (e.g. for habitat species A being an indicator for eelgrass and mixed eelgrass). 
+See blog for more information. 
+Uses library indicspecies::multipatt - which studies the **association** between species patterns and combinations of groups of sites
+
+Input is a species matrix, unsure if it should be standardized first or not (documentation doesn't have standardization, but the example I'm following does)
+Should probably try both and compare result. 
+```{r}
+library(indicspecies)
+head(wide) # non standardized
+head(std.wide) # standardized (wisconsin double standardization)
+head(site.info)
+# okay from the abundance based permanvoa we know there's a significant interaction between habitat and gear type, so we want to include that complexity
+
+# Non standardized
+# note for restricting certain groups we have to understand that multipatt considers the groups as integers, so groups by themselves are first 1:n, and then combinations are listed after n. So for interaction; the first four groups are 1:4, 5+ arecombinations based on group1+2 = 5; group1+3 = 6 etc. 
+indic <- multipatt(wide, cluster = site.info$intx, func = "IndVal.g",
+                   restcomb = c(1:8, 10, 13, 15, 16, 17, 20, 21, 27, 36)) # only including sensical combinations
+
+summary(indic, alpha = 0.05)
+
+# if we look at the indic object before summary then it kind shows us the combinations: 
+#' eelgrass_edna 1, eelgrass_seine 2, kelp_edna 3, kelp_seine 4, mixed_enda 5, mixed_seine 6, 
+#' eelgrass_edna + eelgrass_seine 7, eelgrass_enda + kelp_edna 8, eel_edna +kelp seine 9, eel edna + mixed edna 10
+#' eel edna + mixed seine 11, eel seine + kelp edna 12, eel seine + kelp seine 13, eelgras seine + mixed edna 14
+#' eel seine + mixed seine 15, kelp edna + kelp seine 16, kelpenda +  mixed edna 17, kelp edna+mixed seine 18, 
+#' kelp_seine + mixed edna 19, kelp_seine + mixed seine 20, mixed edna + mixed seine 21, 
+#' eelgrass_edan + eelgrass seine +kelp seine 22, eel edan + eel seine + mixed edna 23, eel_edna + eel seine + mixed seine 24
+#' eel edna + kelp edna + kelp sine 25, eel edna + kelp edna + mixed edna 26, eel edna + kelp edna + mixed seine 27, 
+#' eel edna + kelp seine + mixed edna 28, eel edna + kelp seine + mixed seine 29, eel edna + mixed edna + mixed seine 30,
+#' eel seine + kelp edna + kelp seine 31, eel seine + kelp edna + mixed edna 32, eel seine + kelp edna + mixed seine 33, 
+#' eel seine + kelp seine + mixed edna 34, eel seine + kelp seine + mixed seine 35, eel seine + mixed edna + mixed seine 36,
+#' kelp edna + kelp seine + mixed edna 37, kelp edna + kelp seine + mixed seine 38, kelp edna + mixed edna + mixed seine 39,
+#' kelp seine + mixed edna + mixed seine 40
+#' 
+indic.std <- multipatt(std.wide, cluster = site.info$intx, func = "IndVal.g",
+                   restcomb = c(1:8, 10, 13, 15, 16, 17, 20, 21, 27, 36)) # only including sensical combinations
+
+summary(indic.std, alpha = 0.05) # same results slightly different statistics but same conclusions
+
+
+# one caveat about this (see help documentation) is t hat because we're using combinations (not the classical ISA) I **think** we need to account for type I error 
+library(data.table)
+indic.sign <- as.data.table(indic$sign, keep.rownames = TRUE)
+#add adjusted p-value
+indic.sign[ ,p.value.bh:=p.adjust(p.value, method="BH")]
+#now can select only the indicators with adjusted significant p-values
+indic.signif16 <- indic.sign[p.value.bh<=0.05, ] %>%
+  arrange(index) %>% # note that the index represents the number of the subset of the combinations we provided. In this case we had a total combination of 17 so groups 16 and 17 represent the group of threes: edna eelgrass, kelp, mixed and seine eelgrass, kelp, mixed
+# otherwise its impt to note that even with a bonferonni correction we still have the same species as indicators. 
+  filter(index == 16)
+
+indic.signif17 <- indic.sign[p.value.bh<=0.05, ] %>%
+  arrange(index) %>% 
+  filter(index == 17)
+```
+
+```{r}
+# next pull out rownames and create box plots from the real data from those groups
+edna.indic <- filter(long, species_scientific %in% indic.signif16$rn) %>%
+    left_join(site.info, by = "bay_year") %>%
+  filter(intx %in% c("eelgrass_edna", "kelp_edna", "mixed_edna")) %>%
+  mutate(intx = ifelse(intx == "eelgrass_edna", "Eelgrass eDNA",
+                       ifelse(intx == "kelp_edna", "Understory kelp eDNA",
+                              ifelse(intx == "mixed_edna", "Mixed eelgrass eDNA", intx)))) %>%
+  ggplot() +
+  geom_boxplot(mapping = aes(x = intx, y = value,
+                             fill = species_scientific)) +
+  labs(x = "Habitat and sampling gear", y = "Proportional abundance",
+       fill = "Scientific Name") +
+  scale_fill_manual(values = c("#443983", "#31688e", "#21918c",
+                               "#35b779", "#90d743")) +
+  plot_theme() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.22,0.87))
+
+seine.indic <- filter(long, species_scientific %in% indic.signif17$rn) %>%
+    left_join(site.info, by = "bay_year") %>%
+  filter(intx %in% c("eelgrass_seine", "kelp_seine", "mixed_seine")) %>%
+  mutate(intx = ifelse(intx == "eelgrass_seine", "Eelgrass seine",
+                       ifelse(intx == "kelp_seine", "Understory kelp seine",
+                              ifelse(intx == "mixed_seine", "Mixed eelgrass seine", intx)))) %>%
+  ggplot() +
+  geom_boxplot(mapping = aes(x = intx, y = value,
+                             fill = species_scientific)) +
+  labs(x = "Habitat and sampling gear", y = "Proportional abundance",
+       fill = "Scientific Name") +
+  scale_fill_manual(values = c("#440154", "#fde725")) +
+  plot_theme() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.22,0.93))
+
+indic.plot <- edna.indic + seine.indic +
+  plot_layout(axes = "collect", guides = "collect") +
+  plot_annotation(tag_levels = "a")
+
+# ggsave(filename = "Images/IndicatorSp_abund.png",
+#        plot = indic.plot, height = 8, width = 18)
+```
+
+## binary based
+```{r}
+indic.bin <- multipatt(binary.wide, cluster = site.info$intx, func = "IndVal.g",
+                   restcomb = c(1:8, 10, 13, 15, 16, 17, 20, 21, 27, 36)) # only including sensical combinations
+
+summary(indic.bin, alpha = 0.05)
+
+library(data.table)
+indic.bin.sign <- as.data.table(indic.bin$sign, keep.rownames = TRUE)
+#add adjusted p-value
+indic.bin.sign[ ,p.value.bh:=p.adjust(p.value, method="BH")]
+#now can select only the indicators with adjusted significant p-values
+indic.bin.signif14 <- indic.bin.sign[p.value.bh<=0.05, ] %>%
+  arrange(index) %>%
+  filter(index == 14) # kelp eDNA and seine
+
+indic.bin.signif16 <- indic.bin.sign[p.value.bh<=0.05, ] %>%
+  arrange(index) %>%
+  filter(index == 16) # all habs eDNA
+
+indic.bin.signif17 <- indic.bin.sign[p.value.bh<=0.05, ] %>%
+  arrange(index) %>%
+  filter(index == 17) # all habs seine
+```
+
+Plots binary
+```{r}
+# next pull out rownames and create box plots from the real data from those groups
+edna.bin.indic <- filter(long, species_scientific %in% indic.bin.signif16$rn) %>%
+    left_join(site.info, by = "bay_year") %>%
+  filter(intx %in% c("eelgrass_edna", "kelp_edna", "mixed_edna")) %>%
+  mutate(intx = ifelse(intx == "eelgrass_edna", "Eelgrass eDNA",
+                       ifelse(intx == "kelp_edna", "Understory kelp eDNA",
+                              ifelse(intx == "mixed_edna", "Mixed eelgrass eDNA", intx)))) %>%
+  ggplot() +
+  geom_boxplot(mapping = aes(x = intx, y = value,
+                             fill = species_scientific)) +
+  labs(x = "Habitat and sampling gear", y = "Proportional P/A",
+       fill = "Scientific Name") +
+  scale_fill_manual(values = c("#472d7b", "#21918c", "#addc30")) +
+  plot_theme() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.22,0.87))
+
+seine.bin.indic <- filter(long, species_scientific %in% indic.bin.signif17$rn) %>%
+    left_join(site.info, by = "bay_year") %>%
+  filter(intx %in% c("eelgrass_seine", "kelp_seine", "mixed_seine")) %>%
+  mutate(intx = ifelse(intx == "eelgrass_seine", "Eelgrass seine",
+                       ifelse(intx == "kelp_seine", "Understory kelp seine",
+                              ifelse(intx == "mixed_seine", "Mixed eelgrass seine", intx)))) %>%
+  ggplot() +
+  geom_boxplot(mapping = aes(x = intx, y = value,
+                             fill = species_scientific)) +
+  labs(x = "Habitat and sampling gear", y = "Proportional P/A",
+       fill = "Scientific Name") +
+  scale_fill_manual(values = c("#440154", "#2c728e", "#5ec962", "#fde725")) +
+  plot_theme() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.22,0.93))
+
+kelp_mx_seine <- filter(long, species_scientific %in% indic.bin.signif14$rn) %>%
+    left_join(site.info, by = "bay_year") %>%
+  filter(intx %in% c("kelp_seine", "mixed_seine")) %>%
+  mutate(intx = ifelse(intx == "kelp_seine", "Understory kelp seine",
+                              ifelse(intx == "mixed_seine", "Mixed eelgrass seine", intx))) %>%
+  ggplot() +
+  geom_boxplot(mapping = aes(x = intx, y = value,
+                             fill = species_scientific)) +
+  labs(x = "Habitat and sampling gear", y = "Proportional P/A",
+       fill = "Scientific Name") +
+  scale_fill_manual(values = c("#3b528b", "#28ae80")) +
+  plot_theme() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.22,0.93))
+
+indic.bin.plot <- edna.bin.indic + seine.bin.indic + kelp_mx_seine +
+  plot_layout(axes = "collect", guides = "collect") +
+  plot_annotation(tag_levels = "a") &
+  theme(legend.position = "bottom",
+        legend.box = "vertical",
+        legend.box.just = "left",
+        legend.margin = margin(0.08,0.08,0.08,0.08, "cm"))
+
+ggsave(filename = "Images/IndicatorSp_Bin.png",
+       plot = indic.bin.plot, width = 22, height = 12)
+
+```
+
+
+
 
 # Whole community
 # data
