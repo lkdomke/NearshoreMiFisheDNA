@@ -163,7 +163,7 @@ edna.red <- filter(edna, !(bay_year %in% c("KLWA_A_2021", "BTRB_A_2021", "CLAM_A
 
 # Filter seine data by the edna species groups
 Create wide dataframes for both groups and combine
-```{r}
+```{r warning=FALSE}
 sci.names <- data.frame(Species = unique(edna$Species))
 
 # create groups to rename the seine data, make in proportional space, and then pivot wider 
@@ -691,12 +691,14 @@ vegan3d::orglellipse(nmds3$points,
                      display = "sites", 
                      groups = site.info$intx, 
                      col = rainbow(6)[as.numeric(site.info$intx)])
+
 ```
 
 
 Reminder that this nmds is not well represented in two dimensions and that we should really be looking at three dimensions to get a sense of the variability in the data. 
 Try re positioning in three dimensions and then plotting. There's a chance that the variability between habitat type and gear type will be more visible in three? 
 ```{r}
+library(vegan)
 scrs3 <- scrs3 %>%
   separate(intx, into = c("habitat", "type"), remove = F) %>%
   rownames_to_column(var = "bay_year") %>%
@@ -2419,83 +2421,244 @@ ggsave(filename = "Images/IndicatorSp_Bin.png",
 
 
 # Whole community
-# data
+## Remove extra df
+```{r}
+rm(list = ls()[!ls() %in% c("edna.red", "seine", "site.info")])
+```
+
+# whole comm data
 ```{r}
 # pull the eDNA code with associated alternative ID and bay_year identification
 edna.join <- edna.red %>% # this has the sites removed that don't have associated seine samples
-  dplyr::select(community, alternative_ID, bay_year) %>%
+  dplyr::select(community, alternative_ID, bay_year, habitat) %>%
   distinct() # 102 total samples- matches our site.info for edna
 
-edna.com <- read.csv("Data/all_taxa_simple_20241219.csv") %>%
+edna.com <- read.csv("Data/all_taxa_simple_20250110.csv") %>%
+  filter(bottle %in% unique(edna.join$community)) %>%
+  dplyr::select(c(bottle, taxon, simple.mean, simple.SD)) %>%
   left_join(edna.join, by = c("bottle" = "community")) %>%
-  dplyr::select(-c(X, bottle))
+  dplyr::select(c(taxon, simple.mean, simple.SD, alternative_ID, bay_year, habitat))
 
-unique(edna.com$taxon)
-seine.ordered  <- seine %>%
-  arrange(species_scientific)
-unique(seine.ordered$species_scientific) 
+taxongrp <- read.csv("Data/taxonomy_groups_20250110.csv") %>% # needs a couple changes to make the left_join adjustments work. Oncorhynchus and Leptocottus armatus species has more than one join so need to get rid of the species level 
+  filter(!(taxon %in% c("Oncorhynchus kisutch","Oncorhynchus gorbuscha", 
+                        "Oncorhynchus keta", "Oncorhynchus mykiss", 
+                        "Oncorhynchus nerka", "Leptocottus armatus",
+                        "Sebastes nigrocinctus"))) %>% # small clean up on family level
+  mutate(taxonomic_level = ifelse(taxon == "Sebastes 3", "genus", taxonomic_level)) %>%
+  dplyr::select(-X) %>%
+  distinct()
 ```
 
+Use the taxongrp csv to replace species 
+
 ```{r}
-#' Species we'll need to fix: 
-#' Anoplarchus (group seine data)
-#' Combine Artedius species (to mimic seines)
-#' Combine Blepsias bilobus and Blepsis cirrhosus
-#' Deal with Clinocottus acuticeps and Clinocottus embryum
-#' Gadus (Microgadus proximus)
-#' Hexagrammos and Hexagrammos decagrammus
-#' Hypomesus 
-#' Micropterus (freshwater species? )
-#' Combine Myoxocephalus
-#' What to do wtih Pleuronectidae 1, 2, 3
-#' Salvelinus (group seine data)
-#' Sebastes 1, 2, 3 (by groups)
-#' Sebastes entomelas (Widow rockfish)
-#' Sebastes nigrocinctus (tiger rockfish)
+head(edna.com)
+head(seine)
+
+
+edna.corrected <- left_join(edna.com, taxongrp, by = c("taxon" = "species")) %>%
+  # dplyr::select(-c(simple.N, simple.mean, simple.SD, alternative_ID, bay_year)) %>%
+  # distinct() %>%
+  mutate(corrected_sp = ifelse(is.na(taxon.y), taxon, taxon.y)) %>%
+  group_by(alternative_ID, bay_year, corrected_sp) %>%
+  dplyr::summarise(value = sum(simple.mean)) %>%
+  mutate(type = "edna",
+         bay_year2 = bay_year,
+         bay_year = alternative_ID,
+         habitat = NA) %>%
+  ungroup() %>%
+  dplyr::select(-c(alternative_ID))
+
+# before we join with the taxon there's a few species (UNFLAT, UNSCUL, AND UNROCK) that should be assigned to the most numerous species at the site they were captured
+ 
+# sculp.sp <- {filter(taxongrp, family == "Cottidae") %>% dplyr::select(species)} %>%
+#   rbind("Artedius spp.")
+# 
+# pleur.sp <- {filter(taxongrp, family == "Pleuronectidae") %>% dplyr::select(species)}
+#   rbind("Artedius spp.")
+#   
+# rock.sp <- {filter(taxongrp, family == "Sebastidae") %>% dplyr::select(species)} %>%
+#   rbind("Sebastes sp")
+# 
+# filter(seine, bay_id == "HARM_A") %>%
+#   subset(species_scientific %in% rock.sp$species) %>%
+#   group_by(species_scientific) %>%
+#   dplyr::summarise(sum = sum(abundance)) 
+
+############################################
+## max for sculpins at sylb_a is artedius spp.
+## max sculp kahs_a is artedius spp.
+
+## max for flatfish at REEF_A is Parophrys vetulus 
+## max for flatfish at REEF_B is Parophrys vetulus
+
+## max for rockfish at HARM_A is copper/quillback so sebastes caurinus will work cause it'll get grouped to the same sebastes match
+##############################################
+
+seine.corrected <- seine %>% # first fix the unflat, unscul, unrock species with max sp at the site
+  mutate(species_scientific = ifelse(sp_code == "UNFLAT", "Parophrys vetulus", species_scientific),
+         species_scientific = ifelse(sp_code == "UNSCUL", "Artedius spp.", species_scientific),
+         species_scientific = ifelse(sp_code == "UNROCK", "Sebastes caurinus", species_scientific)) %>%
+  mutate(species_scientific = ifelse(species_common == "Copperquillback juvenile rockfish", 
+                                     "Sebastes maliger", species_scientific),
+         species_scientific = ifelse(species_common == "Yellowtail/black juvenile rockfish complex",
+                                     "Sebastes flavidus", species_scientific),# this isn't 100p but we'll work when we leftjoin with taxongrp to correctly put it into the right sebastes group
+         species_scientific = ifelse(species_scientific == "Lepidopsetta spp.", "Lepidopsetta polyxystra",
+                                     species_scientific)) %>%
+  left_join(taxongrp, by = c("species_scientific" = "species")) %>%
+  # dplyr::select(-c(bay_year, bay_id, habitat, fork_length, mass_g, abundance, type)) %>%
+  # distinct() %>%
+  mutate(corrected_sp = ifelse(is.na(taxon), species_scientific, taxon)) %>%
+  group_by(bay_year, habitat, corrected_sp, type) %>%
+  dplyr::summarise(value = sum(abundance)) %>%
+  mutate(bay_year2 = bay_year) %>%
+  group_by(bay_year, bay_year2, habitat, type) %>% # ugly code but have to change seine data to prop abund
+  mutate(total = sum(value)) %>%
+  ungroup() %>%
+  group_by(bay_year, bay_year2, habitat, type, total, corrected_sp) %>%
+  dplyr::summarize(value = sum(value)/total) %>%
+  ungroup() %>%
+  dplyr::select(-total) %>%
+  distinct()
+
 ```
 
-Questionable species: 
-Embiotoca lateralis (Striped surfperch); although shows up in Wrangell
-Hypomesus (genus of smelts), includes: surf, pon, japanese, delta smelt
-Micropterus (genus of freshwater fish, black bass); game fish introduced 13 known species
 
+next steps: 
+- group artedius spp for both beach seine and eDNA to Artedius genus level
+- group irish lord to the genus levele for both beach seine and eDNA
+
+Combine edna and seine and then group by artedius and irish lords
 ```{r}
-Artedius <- c("Artedius fenestralis", "Artedius harringtoni",
-              "Artedius lateralis", "Artedius spp.")
+head(edna.corrected)
+head(seine.corrected)
 
-# Hexagrammos <- c("Hexagrammos", "Hexagrammos decagrammus", 
-#                  "Hexagrammos octogrammus", "Hexagrammos lagocephalus",
-#                  "Hexagrammos stelleri")
-# 
-# 
-# Myox <- c("Myoxocephalus", "Myoxocephalus jaok", "Myoxocephalus polyacanthocephalus",
-#           "Myoxocephalus quadricornis", "Myoxocephalus scorpioides",
-#           "Myoxocephalus scorpius", "Myoxocephalus sinensis", 
-#           "Myoxocephalus stelleri") # there are more but these are the ones I think common or that show up in the seine. 
-# 
-# Oncorhynchus <- c("Oncorhynchus clarkii", "Oncorhynchus gorbuscha", 
-#                   "Oncorhynchus keta", "Oncorhynchus kisutch", 
-#                   "Oncorhynchus tshawytscha", "Oncorhynchus nerka",
-#                   "Oncorhynchus")
-# 
-# Salvelinus <- c("Salvelinus alpinus", "Salvelinus namaycush", "Salvelinus malma", 
-#                 "Salvelinus confluentus", "Salvelinus fontinalis")
-# 
-# Sebastes1 <- c()
-# Sebastes2 <- c()
-# Sebastes3 <- c()
-# 
-# Sebastolobus <- c("Sebastolobus alascanus", "Sebastolobus altivelis",
-#                   "Sebastolobus macrochir")
+comb <- rbind(edna.corrected, seine.corrected) %>%
+  mutate(corrected_sp = ifelse(corrected_sp %in% c("Artedius fenestralis", "Artedius harringtoni",
+                                                   "Artedius lateralis", "Artedius spp."), "Artedius spp.",
+                               corrected_sp),
+         corrected_sp = ifelse(corrected_sp %in% c("Hemilepidotus hemilepidotus", "Hemilepidotus spinosus",
+                                                   "Hemilepidotus sp."), "Hemilepidotus spp.",
+                               corrected_sp)) %>%
+  group_by(bay_year, bay_year2, corrected_sp, type, habitat) %>%
+  dplyr::summarize(value = sum(value)) %>%
+  left_join(site.info, by = c("bay_year", "bay_year2", "type")) %>%
+  mutate(habitat = habitat.y) %>%
+  pivot_wider(id_cols = c(bay_year, bay_year2, type, intx, habitat, place_name, date, julian,
+                          latitude, longitude, year), names_from = corrected_sp, values_from = value,
+              values_fill = 0, values_fn = sum)
+```
 
-Stichaeidae <- c("Xiphister", "Anoplarchus insignis", "Anoplarchus",
-                 "Anoplarchus purpurescens", "Lumpenus sagitta", "Stichaeus punctatus")
+# data cleaning
+## wide & long combined data
+```{r}
+site.info2 <- site.info %>%
+  dplyr::select(bay_year:year) %>%
+  distinct() %>%
+  arrange(bay_year2)
 
-Hemilepidotus <- c("Hemilepidotus sp.", "Hemilepidotus hemilepidotus",
-                   "Hemilepidotus spinosus")
+wide <- comb %>%
+  column_to_rownames(var = "bay_year") %>%
+  arrange(bay_year2) %>%
+  dplyr::select(-c(bay_year2:year))
 
-Lepidopsetta <- c("Lepidopsetta", "Lepidopsetta bilineata", "Lepidopsetta polyxystra",
-                  "Lepidopsetta mochigarei", "Lepidopsetta spp.") # northern & rock sole & dusty sole
+long <- wide %>%
+  rownames_to_column(var = "bay_year") %>%
+  pivot_longer(cols = c("Agonopsis vulsa":"Enophrys lucasi")) %>%
+  left_join(site.info2, by = "bay_year")
+  
 
+anti_join(site.info2, comb, by = "bay_year")
+anti_join(comb, site.info2, by = "bay_year")
+
+```
+
+
+## standardization
+```{r}
+std.wide <- wisconsin(wide)
+```
+
+# disimilarity metrics
+## bray 
+```{r}
+bray.wide <- vegdist(std.wide, method = "bray")
+```
+
+## jaccard
+```{r}
+# change the value column to binary and then calc jaccard dissimilarity
+binary.wide <- long %>%
+  mutate(binary = ifelse(value <= 0, 0, 1)) %>%
+  pivot_wider(id_cols = -c(bay_year2:year, value), names_from = name,
+              values_from = binary) %>%
+  column_to_rownames(var = "bay_year")
+
+
+# I dont believe we need to standardize binary data before calculating jaccard dissimilarity
+jacc.wide <- vegdist(binary.wide, method = "jaccard", binary = T)
+plot(jacc.wide)
+range(binary.wide)
+```
+
+## homogeneity of dispersion
+randomization test to compare within-group 'dispersions' with any distance measure. This tells you if the differences between sites are because of dispersion or variation or if it truly driven by a difference in sites (as can be determined by a PERMANOVA test)
+
+Both betadisper tests are significant indicating significant within group dispersion. 
+This somewhat makes sense because each group contains the same sites just sampled with different methods
+```{r}
+disp.type <- betadisper(bray.wide, site.info2$type)
+anova(disp.type) 
+# H0 accepted (marginally); within group dispersion neglible 
+# pvalue = 0.16
+
+disp.hab <- betadisper(bray.wide, site.info2$habitat)
+anova(disp.hab) 
+#H0 accepted
+# pvalue = 0.16
+
+disp.year <- betadisper(bray.wide, site.info2$year)
+anova(disp.year) 
+#H0 accepted, p-value = 0.168
+
+##### JACCARD DISTANCE ######
+disp.type.bin <- betadisper(jacc.wide, site.info2$type)
+anova(disp.type.bin)
+#H0 rejected, MAJOR dispersion within group
+
+disp.habitat.bin <- betadisper(jacc.wide, site.info2$habitat)
+anova(disp.habitat.bin)
+#H0 rejected, moderate evidence for within group dispersion
+
+disp.year.bin <- betadisper(jacc.wide, site.info2$year)
+anova(disp.year.bin)
+#H0 accepted; no within group dispersion 
+```
+
+# permanova
+```{r}
+# write out relevant data
+write.csv(std.wide, "Data/whole_comm_std_abund.csv")
+write.csv(binary.wide, "Data/whole_comm_binary.csv")
+write.csv(site.info2, "Data/whole_comm_site_info.csv")
+
+###################################
+##### ABUNDANCE BASED PERMANOVA ###
+###################################
+set.seed(09281992)
+
+adonis2(bray.wide ~ habitat * type, data = site.info2, 
+        by = "margin", perm = 999)
+# significant interaction term (pvalue = 0.002)
+adonis2(bray.wide ~ habitat * type + bay_year2,
+        by = "margin", data = site.info)
+# significant impact of site (p = 0.001) and habitat by type (p = 0.001)
+
+# blocks
+perm <- how(nperm = 999)
+setBlocks <- with(site.info2, bay_year2)
+adonis2(bray.wide ~ habitat * type, by = "margin", 
+        permutation = perm, data = site.info2)
+# there is a significant interaction of habitat by type (pvalue = 0.005)
 ```
 
