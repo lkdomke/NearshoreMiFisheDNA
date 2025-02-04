@@ -36,6 +36,7 @@ library(tidyverse)
 library(lubridate)
 library(ggrepel)
 library(patchwork)
+library(ggforce)
 library(vegan)
 extrafont::loadfonts(device="win")
 ```
@@ -66,6 +67,18 @@ plot_theme_small <- function() {
             legend.key = element_rect(fill="transparent", colour=NA),
             panel.grid.major = element_blank(), 
             panel.grid.minor = element_blank(),
+            strip.background = element_rect(colour = "NA", fill = "grey96"))
+}
+
+
+plot_theme_bw <- function() {
+  theme_bw(base_size = 20, base_family = "Calibri") %+replace%
+    theme(panel.background  = element_blank(),
+            plot.background = element_rect(fill="white", colour=NA), 
+            legend.background = element_rect(fill="transparent", colour=NA),
+            legend.key = element_rect(fill="transparent", colour=NA),
+            # panel.grid.major = element_blank(), 
+            # panel.grid.minor = element_blank(),
             strip.background = element_rect(colour = "NA", fill = "grey96"))
 }
 ```
@@ -157,7 +170,10 @@ seine.info <- read.csv("Data/seine_biomass_at_edna_sites.csv") %>%
   dplyr::select(c(bay_year, place_name, habitat, date, julian, latitude, longitude)) %>%
   distinct() %>%
   mutate(type = "seine",
-         bay_year2 = bay_year) 
+         bay_year2 = bay_year) %>% #
+  mutate(habitat = ifelse(bay_year == "BLAQ_A_2022", "mixed", habitat),
+         habitat = ifelse(bay_year == "TAHB_A_2021", "mixed", habitat),
+         habitat = ifelse(bay_year == "SFEI_A_2022", "eelgrass", habitat))
 
 edna.info <- edna.wide %>%
   dplyr::select(c(bay_year, bay_year2, habitat, type)) %>%
@@ -392,6 +408,7 @@ anova(disp.year.bin)
 
 # permanova
 ```{r}
+set.seed(09281992)
 # write out relevant data - going to Jeanette to compare with PRIMER
 # write.csv(std.wide, "Data/whole_comm_std_abund.csv")
 # write.csv(binary.wide, "Data/whole_comm_binary.csv")
@@ -1039,6 +1056,7 @@ head(site.info2)
 
 # Non standardized
 # note for restricting certain groups we have to understand that multipatt considers the groups as integers, so groups by themselves are first 1:n, and then combinations are listed after n. So for interaction; the first four groups are 1:4, 5+ arecombinations based on group1+2 = 5; group1+3 = 6 etc. 
+set.seed(09281992)
 all.comb <- multipatt(wide, cluster = site.info2$intx, func = "IndVal.g")
 colnames(as.data.frame(all.comb$comb)) # use this to determine which sensicle combinations should be included. 
 
@@ -1079,10 +1097,13 @@ indic.sign.bh <- indic.sign[p.value.bh <=0.05] %>%
   left_join(combinations, by = "index") %>%
   separate(comb,sep = "\\+", into = c("intx1", "intx2", "intx3"), remove = F)
 
+unique(indic.sign.bh$comb)
+
 ```
 
+### indic sp plots
 ```{r}
-sp.palette <- hcl.colors(17)
+sp.palette <- hcl.colors(18)
 
 # create a loop that goes through each combination and pulls abundance data so its in a single dataframe, we can then facet wrap by combination
 indic.dat <- data.frame()
@@ -1097,82 +1118,160 @@ for(i in unique(indic.sign.bh$index)){
   
   indic.dat <- rbind(indic.dat, tmp)
 
-  }
+}
 
 
-ggplot(data = indic.dat) +
+p1 <- indic.dat %>%
+  filter(comb %in% c("eelgrass_edna+kelp_edna+mixed_edna", 
+                             "eelgrass_seine+kelp_seine+mixed_seine")) %>%
+  mutate(comb = ifelse(comb == "eelgrass_edna+kelp_edna+mixed_edna",
+                       "All habitats eDNA", 
+                       ifelse(comb == "eelgrass_seine+kelp_seine+mixed_seine",
+                              "All habitats seine", comb))) %>%
+  ggplot() +
   geom_boxplot(mapping = aes(x = name, y = value, fill = name)) +
-  labs(x = "Habitat and sampling gear", y = "Proportional abundance",
+  labs(x = NULL, y = "Proportional abundance",
        fill = "Scientific Name") +
   scale_fill_manual(values = sp.palette) +
   plot_theme() +
   theme(legend.position = "none",
         #axis.text.x = element_text(angle = 45, hjust = 1)
         ) +
-  facet_wrap(~comb, scales = "free")
+  facet_row(~comb, scales = "free", space = "free") 
 
+p1
 
-
-
-
-
-
-# next pull out rownames and create box plots from the real data from those groups
-eelg.edna.indic <- filter(long, name %in% eelg.edna$rn) %>%
-  filter(intx %in% c("eelgrass_edna")) %>%
-  mutate(intx = ifelse(intx == "eelgrass_edna", "Eelgrass eDNA",intx)) %>%
+p2 <- indic.dat %>%
+  filter(comb %in% c("kelp_seine", "mixed_seine",
+                     "kelp_seine+mixed_seine")) %>%
+  mutate(comb = ifelse(comb == "kelp_seine",
+                       "Seine: understory kelp", 
+                       ifelse(comb == "mixed_seine",
+                              "Seine: mixed eelgrass", 
+                               ifelse(comb == "kelp_seine+mixed_seine",
+                                     "Seine: kelp & mixed eelgrass", comb)))) %>%
   ggplot() +
-  geom_boxplot(mapping = aes(x = intx, y = value,
-                             fill = name)) +
-  labs(x = "Habitat and sampling gear", y = "Proportional abundance",
+  geom_boxplot(mapping = aes(x = name, y = value, fill = name)) +
+  labs(x = NULL, y = "Proportional abundance",
        fill = "Scientific Name") +
-  scale_fill_manual(values = c("#443983", "#31688e", "#21918c",
-                               "#35b779", "#90d743")) +
+  scale_fill_manual(values = sp.palette) +
   plot_theme() +
-  theme(legend.position = "inside",
-        legend.position.inside = c(0.22,0.87))
+  theme(legend.position = "none",
+        #axis.text.x = element_text(angle = 45, hjust = 1)
+        ) +
+  facet_row(~comb, scales = "free", space = "free") 
 
-kelp.seine.indic <- filter(long, name %in% kelp.seine$rn) %>%
-  filter(intx %in% c("kelp_seine")) %>%
-  mutate(intx = ifelse(intx == "kelp_seine", "Understory kelp seine",intx)) %>%
-  ggplot() +
-  geom_boxplot(mapping = aes(x = intx, y = value,
-                             fill = name)) +
-  labs(x = "Habitat and sampling gear", y = "Proportional abundance",
-       fill = "Scientific Name") +
-  scale_fill_manual(values = c("#443983", "#31688e", "#21918c",
-                               "#35b779", "#90d743")) +
-  plot_theme() +
-  theme(legend.position = "inside",
-        legend.position.inside = c(0.22,0.87))
+p2
 
-mixed.seine.indic <- filter(long, name %in% mixed.seine$rn) %>%
-  filter(intx %in% c("mixed_seine")) %>%
-  mutate(intx = ifelse(intx == "mixed_seine", "Mixed eelgrass seine",intx)) %>%
+p3 <- indic.dat %>%
+  filter(comb %in% c("eelgrass_edna",
+                     "eelgrass_edna+kelp_edna",
+                     "eelgrass_edna+eelgrass_seine", 
+                     "eelgrass_seine+mixed_seine")) %>%
+  mutate(comb = ifelse(comb == "eelgrass_edna",
+                       "eDNA: eelgrass", 
+                       ifelse(comb == "eelgrass_edna+kelp_edna",
+                              "eDNA: eelgrass & kelp", 
+                              ifelse(comb == "eelgrass_edna+eelgrass_seine",
+                                     "Eelgrass: eDNA & seine", 
+                                     ifelse(comb == "eelgrass_seine+mixed_seine",
+                                            "Seine: eelgrass & mixed eelgrass", comb))))) %>%
   ggplot() +
-  geom_boxplot(mapping = aes(x = intx, y = value,
-                             fill = name)) +
-  labs(x = "Habitat and sampling gear", y = "Proportional abundance",
+  geom_boxplot(mapping = aes(x = name, y = value, fill = name)) +
+  labs(x = "Indicator species scientific name", y = "Proportional abundance",
        fill = "Scientific Name") +
-  scale_fill_manual(values = c("#443983", "#31688e", "#21918c",
-                               "#35b779", "#90d743")) +
+  scale_fill_manual(values = sp.palette) +
   plot_theme() +
-  theme(legend.position = "inside",
-        legend.position.inside = c(0.22,0.87))
+  theme(legend.position = "none",
+        #axis.text.x = element_text(angle = 45, hjust = 1)
+        ) +
+  facet_row(~comb, scales = "free", space = "free") 
 
-mixed.seine.indic <- filter(long, name %in% eel$rn) %>%
-  filter(intx %in% c("mixed_seine")) %>%
-  mutate(intx = ifelse(intx == "mixed_seine", "Mixed eelgrass seine",intx)) %>%
-  ggplot() +
-  geom_boxplot(mapping = aes(x = intx, y = value,
-                             fill = name)) +
-  labs(x = "Habitat and sampling gear", y = "Proportional abundance",
-       fill = "Scientific Name") +
-  scale_fill_manual(values = c("#443983", "#31688e", "#21918c",
-                               "#35b779", "#90d743")) +
-  plot_theme() +
-  theme(legend.position = "inside",
-        legend.position.inside = c(0.22,0.87))
+p3
+
+
+indicator <- p1 / p2 / p3 +
+  plot_layout(axes = "collect_y")
+
+# ggsave(filename = "Images/wc_indicator_sp.png",
+#        plot = indicator,
+#        height = 12, width = 18)
+
+
+
+# ggplot(indic.dat) +
+#   geom_boxplot(mapping = aes(x = name, y = value, fill = name)) +
+#   labs(x = NULL, y = "Proportional abundance",
+#        fill = "Scientific Name") +
+#   scale_fill_manual(values = sp.palette) +
+#   plot_theme() +
+#   theme(legend.position = "none",
+#         #axis.text.x = element_text(angle = 45, hjust = 1)
+#         ) +
+#   facet_wrap(~comb, scales = "free") 
+```
+
+Next we want to create a figure that looks at seine data and plot what it looks like to have
+species proportion on the x axis and species abundance on the y axis 
+facet_wrap by hab
+
+
+#compare seine prop to abund
+```{r}
+seine.corrected.abund <- seine %>% # first fix the unflat, unscul, unrock species with max sp at the site
+  mutate(species_scientific = ifelse(sp_code == "UNFLAT", "Parophrys vetulus", species_scientific),
+         species_scientific = ifelse(sp_code == "UNSCUL", "Artedius spp.", species_scientific),
+         species_scientific = ifelse(sp_code == "UNROCK", "Sebastes caurinus", species_scientific)) %>%
+  mutate(species_scientific = ifelse(species_common == "Copperquillback juvenile rockfish", 
+                                     "Sebastes maliger", species_scientific),
+         species_scientific = ifelse(species_common == "Yellowtail/black juvenile rockfish complex",
+                                     "Sebastes flavidus", species_scientific),# this isn't 100p but we'll work when we leftjoin with taxongrp to correctly put it into the right sebastes group
+         species_scientific = ifelse(species_scientific == "Lepidopsetta spp.", "Lepidopsetta polyxystra",
+                                     species_scientific)) %>%
+  left_join(taxongrp, by = c("species_scientific" = "species")) %>%
+  # dplyr::select(-c(bay_year, bay_id, habitat, fork_length, mass_g, abundance, type)) %>%
+  # distinct() %>%
+  mutate(corrected_sp = ifelse(is.na(taxon), species_scientific, taxon)) %>%
+  group_by(bay_year, habitat, corrected_sp, type) %>%
+  dplyr::summarise(total_abund = sum(abundance)) %>%
+  mutate(bay_year2 = bay_year) #%>%
+  # group_by(bay_year, bay_year2, habitat, type) %>% # ugly code but have to change seine data to prop abund
+  # mutate(total = sum(value)) %>%
+  # ungroup() %>%
+  # group_by(bay_year, bay_year2, habitat, type, total, corrected_sp) %>%
+  # dplyr::summarize(value = sum(value)/total) %>%
+  # ungroup() %>%
+  # dplyr::select(-total) %>%
+  # distinct()
+
+seine.both <- left_join(seine.corrected, seine.corrected.abund)
+
+nrow(seine.corrected); nrow(seine.corrected.abund); nrow(seine.both) # all same length, good
+
+table(is.na(seine.both)) # no NAs
+```
+
+graph it
+```{r}
+
+ggplot(seine.both) +
+  geom_point(aes(x = value, y = total_abund/100, color = corrected_sp), size = 4) +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed") +
+  scale_x_continuous(expand = c(0,0)) +
+  scale_y_continuous(expand = c(0,0)) +
+  plot_theme_bw() +
+  theme(legend.position = "none") +
+  facet_wrap(~habitat, scales = "free")
+
+
+ggplot(seine.both) +
+  geom_point(aes(x = value, y = total_abund/100)) +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed") +
+  scale_x_continuous(expand = c(0,0), limits = c(0, .20)) +
+  scale_y_continuous(expand = c(0,0), limits = c(0, 5)) +
+  plot_theme_bw() +
+  theme(legend.position = "none") 
 
 
 ```
+
