@@ -1,0 +1,179 @@
+---
+title: "edna_seine_map"
+output: html_document
+date: "2025-01-30"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+#libraries
+```{r}
+
+library(ggplot2) # used
+# library(ggtext) # used
+library(raster) # used
+library(sf) # used 
+library(rnaturalearth) #used
+# if rnaturalearth can't be loaded, try:
+#install.packages("rnaturalearthhires", repos = "https://ropensci.r-universe.dev", type = "source")
+
+library(dplyr) # used
+library(ggspatial) # used, provides scale bar
+library(patchwork)
+```
+
+#custom fxn
+```{r}
+
+plot_theme <- function() {
+  theme_bw(base_size = 20, base_family = "Calibri") %+replace%
+    theme(panel.background  = element_blank(),
+            plot.background = element_rect(fill="white", colour=NA), 
+            legend.background = element_rect(fill="transparent", colour=NA),
+            legend.key = element_rect(fill="transparent", colour=NA),
+            panel.grid.major = element_blank(), 
+            panel.grid.minor = element_blank(),
+            strip.background = element_rect(colour = "NA", fill = "grey96"))
+}
+
+# to use ggsave and export plots include argument 'device=cario_pdf' e.g.: 
+# ggsave("name.pdf", device=cairo_pdf, width = 6, height = 6)
+```
+
+
+
+# data
+```{r}
+ak <- st_read(dsn = "../General GIS goodies/alaska_63360/",
+              layer = "ALASKA_63360_PY")
+
+canada <- st_read(dsn = "../General GIS goodies/Canadian Provinces/",
+                  layer = "PROVINCE")
+
+seine.info <- read.csv("Data/seine_biomass_at_edna_sites.csv") %>%
+  dplyr::select(c(bay_year, place_name, habitat, date, julian, latitude, longitude)) %>%
+  distinct() %>%
+  mutate(type = "seine",
+         bay_year2 = bay_year) %>%
+  mutate(latitude = ifelse(bay_year == "MOIR_A_2021" & habitat == "eelgrass", 54.97110, latitude)) %>% # fix a typo 
+  mutate(habitat = ifelse(bay_year == "BLAQ_A_2022", "mixed", habitat),
+         habitat = ifelse(bay_year == "TAHB_A_2021", "mixed", habitat),
+         habitat = ifelse(bay_year == "SFEI_A_2022", "eelgrass", habitat))
+
+sites <- st_as_sf(seine.info, coords = c("longitude", "latitude"), crs = 4326)
+```
+
+
+# inset map
+
+```{r}
+world <- ne_countries(scale = 10, returnclass = "sf")
+usa <- ne_states("United States of America", returnclass = "sf") # simple features
+ak.small <- subset(usa, name == "Alaska") %>% # Subset ak from the usa object for small AK inset
+  st_transform(., crs = st_crs(26908))
+
+
+canada.crop <- st_transform(canada, crs = st_crs(26908)) %>%
+  st_crop(., sf::st_bbox(ak.small))
+
+
+inset <- ggplot() +
+  geom_sf(ak.small, mapping = aes(), fill = "#999999", color = "black") +
+  geom_sf(canada.crop, mapping = aes(), fill = "#5e5e5e", color = "black") +
+  coord_sf(xlim = c(-2003837, 946671), ylim = c(5964637, 8153307), 
+           expand = FALSE) + # controlling axis to disregard dateline
+  geom_rect(aes(xmin = sf::st_bbox(st_transform(sites, crs = st_crs(26908)))[c(1)],
+                xmax = sf::st_bbox(st_transform(sites, crs = st_crs(26908)))[c(3)],
+                ymin = sf::st_bbox(st_transform(sites, crs = st_crs(26908)))[c(2)],
+                ymax = sf::st_bbox(st_transform(sites, crs = st_crs(26908)))[c(4)]),
+            color = "red", fill = NA, linewidth = 2) + # creates red box around region equavalent to the spatial extent of sitesobj1 bbox
+  geom_text(mapping = aes(x = -365742.4, y = 7333075), label = "Alaska", size = 4) +
+  geom_text(mapping = aes(x = 489556.3, y = 7021835), label = "Canada", size = 4) + #7021835
+  theme_classic() +
+  theme(axis.title = element_blank(),  # Removing remnants of axis title, text, tick marks,
+        axis.text = element_blank(),  # lines, and changing plot background to transparent,
+        axis.ticks = element_blank(), # and also creating black border around AK map
+        axis.line = element_blank(),
+        plot.background = element_rect(fill = "transparent", colour = NA),
+        panel.border = element_rect(colour = "black", fill = NA, size = 0.75)) +
+  annotation_scale(text_family = "Calibri", text_cex = 1.5, line_width = 2)
+  #ggsn::scalebar(location = "bottomleft", dist = 500, dist_unit = "km", transform = F,
+  #               x.min = -1554768, x.max = -183173.4, y.min = 6035655, y.max = 6209974, 
+  #               st.bottom = FALSE, height = 0.3, st.dist = 0.5, st.size = 6)
+```
+
+main map prep
+```{r}
+sites.26908 <- st_transform(sites, crs = st_crs(26908)) 
+
+ak.crop2 <- ak %>%
+  st_transform(., crs = st_crs(26908)) %>%
+  #st_crop(ak, y = sf::st_bbox(zos)) %>% # limit it larger than the target distance
+  st_simplify()
+
+labels <- data.frame(
+  Latitude = c(55.72174, 55.62174, 54.74320, 55.56765, 55.46765, 55.69219),
+  Longitude = c(-132.8007,-132.8007, -131.3829, -131.3543, -131.3543, -134.2992),
+  Text = c("Prince of Wales", "Island","Dixon Entrance", "Revillagigedo", "Island", "Gulf of Alaska"))
+
+labels.prj <- st_as_sf(labels, coords = c("Longitude", "Latitude"), crs = 4326) %>%
+  st_transform(., crs = st_crs(26908))
+
+ak.crop <- ak %>%
+  st_transform(., crs = st_crs(26908)) %>%
+  st_crop(ak, xmin = 513765.8, xmax = 760892.3,
+          ymin = 6054378, ymax = 6247162)
+
+canada.crop.proj <- st_transform(canada.crop, crs = st_crs(26908)) %>%
+  st_crop(., y = sf::st_bbox(ak.crop))
+```
+
+main map
+
+```{r}
+main_map <- ggplot() +
+  #geom_sf(canada.crop.proj, mapping = aes(), fill = "#999999") +
+  geom_sf(ak.crop, mapping = aes(), fill = "#999999") +
+  geom_sf(sites.26908, mapping = aes(fill = habitat, shape = habitat, size = habitat), 
+          color = "black") +
+  scale_shape_manual(values = c(21, 24, 23),
+                     labels = c("Eelgrass",
+                                "Understory kelp",
+                                "Mixed eelgrass"),
+                     name = "Sample locations") +
+  scale_fill_manual(values = c("#327610", "#E4572E", "#E1AD01"),
+                    labels = c("Eelgrass",
+                               "Understory kelp",
+                               "Mixed eelgrass"),
+                    name = "Sample locations") +
+  scale_size_manual(values = c(5,4,4),
+                    labels = c("Eelgrass",
+                               "Understory kelp",
+                               "Mixed eelgrass"),
+                    name = "Sample locations") +
+  coord_sf(expand = FALSE) +
+  labs(x = "Longitude", y = "Latitude") +
+  geom_sf_label(labels.prj, mapping = aes(label = Text), family = "Calibri", size = 6) +
+  plot_theme() +
+  theme(legend.position = "inside",
+        legend.position.inside = c(0.12,0.1),
+        #legend.text = element_markdown(size = 15),
+        legend.spacing.y = unit(0, "cm"),
+        axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+
+#main_map
+```
+
+together!
+
+```{r}
+
+
+main_map + inset_element(inset, 0.64, 0.64, 1, 1, align_to = "plot", ignore_tag = TRUE)
+```
+
