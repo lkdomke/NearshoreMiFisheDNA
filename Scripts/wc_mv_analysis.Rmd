@@ -320,6 +320,7 @@ comb <- rbind(edna.corrected, seine.corrected) %>%
               values_fill = 0, values_fn = sum)
 ```
 
+
 # data cleaning
 ## wide & long combined data
 ```{r}
@@ -341,6 +342,14 @@ long <- wide %>%
 anti_join(site.info2, comb, by = "bay_year")
 anti_join(comb, site.info2, by = "bay_year")
 
+```
+
+pull out species names
+```{r}
+sp <- long %>%
+  distinct(name)
+
+write.csv(sp, "Data/species_name_comb.csv")
 ```
 
 
