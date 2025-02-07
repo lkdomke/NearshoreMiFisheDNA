@@ -739,7 +739,7 @@ p1 <- ggplot() +
                      values = c("solid", "dashed")) +
   scale_color_manual(name = "Habitat",
                      labels = c("Eelgrass", "Understory kelp", "Mixed eelgrass"),
-                     values = c("#73A580","#D16103", "#E1AD01")) +
+                     values = c("#327610", "#E4572E", "#E1AD01")) +
   labs(x = "NMDS1", y = "NMDS2") +
   plot_theme() +
   guides(shape = guide_legend(override.aes = list(size = 3)),
@@ -767,7 +767,7 @@ p2 <- ggplot() +
                      values = c("solid", "dashed")) +
   scale_color_manual(name = "Habitat",
                      labels = c("Eelgrass", "Understory kelp", "Mixed eelgrass"),
-                     values = c("#73A580","#D16103", "#E1AD01")) +
+                     values = c("#327610", "#E4572E", "#E1AD01")) +
   labs(x = "NMDS1", y = "NMDS3") +
   plot_theme() +
   guides(shape = guide_legend(override.aes = list(size = 3)),
@@ -794,7 +794,7 @@ p3 <- ggplot() +
                      values = c("solid", "dashed")) +
   scale_color_manual(name = "Habitat",
                      labels = c("Eelgrass", "Understory kelp", "Mixed eelgrass"),
-                     values = c("#73A580","#D16103", "#E1AD01")) +
+                     values = c("#327610", "#E4572E", "#E1AD01")) +
   labs(x = "NMDS2", y = "NMDS3") +
   plot_theme() +
   guides(shape = guide_legend(override.aes = list(size = 3)),
@@ -837,7 +837,7 @@ p4 <- ggplot() +
                      values = c("solid", "dashed")) +
   scale_color_manual(name = "Habitat",
                      labels = c("Eelgrass", "Understory kelp", "Mixed eelgrass"),
-                     values = c("#73A580","#D16103", "#E1AD01")) +
+                     values = c("#327610", "#E4572E", "#E1AD01")) +
   labs(x = "NMDS1", y = "NMDS2") +
   plot_theme() +
   guides(shape = guide_legend(override.aes = list(size = 3)),
@@ -865,7 +865,7 @@ p5 <- ggplot() +
                      values = c("solid", "dashed")) +
   scale_color_manual(name = "Habitat",
                      labels = c("Eelgrass", "Understory kelp", "Mixed eelgrass"),
-                     values = c("#73A580","#D16103", "#E1AD01")) +
+                     values = c("#327610", "#E4572E", "#E1AD01")) +
   labs(x = "NMDS1", y = "NMDS3") +
   plot_theme() +
   guides(shape = guide_legend(override.aes = list(size = 3)),
@@ -892,7 +892,7 @@ p6 <- ggplot() +
                      values = c("solid", "dashed")) +
   scale_color_manual(name = "Habitat",
                      labels = c("Eelgrass", "Understory kelp", "Mixed eelgrass"),
-                     values = c("#73A580","#D16103", "#E1AD01")) +
+                     values = c("#327610", "#E4572E", "#E1AD01")) +
   labs(x = "NMDS2", y = "NMDS3") +
   plot_theme() +
   guides(shape = guide_legend(override.aes = list(size = 3)),
@@ -953,10 +953,10 @@ p7 <- ggplot() +
                                 "Understory kelp, sampled with seine",
                                 "Mixed eelgrass, sampled with eDNA", 
                                 "Mixed eelgrass, sampled with seine"),
-                     values = c("#73A580", "#73A580",
-                                "#D16103", "#D16103",
+                     values = c("#327610", "#327610",
+                                "#E4572E", "#E4572E",
                                 "#E1AD01", "#E1AD01")) +
-  labs(x = "NMDS1", y = "NMDS2") +
+  labs(x = "NMDS1", y = "NMDS2") + 
   plot_theme() +
   guides(shape = guide_legend(override.aes = list(size = 3)),
          color = guide_legend(override.aes = list(size = 3))) +  
@@ -1003,8 +1003,8 @@ p8 <- ggplot() +
                                 "Understory kelp, sampled with seine",
                                 "Mixed eelgrass, sampled with eDNA", 
                                 "Mixed eelgrass, sampled with seine"),
-                     values = c("#73A580", "#73A580",
-                                "#D16103", "#D16103",
+                     values = c("#327610", "#327610",
+                                "#E4572E", "#E4572E",
                                 "#E1AD01", "#E1AD01")) +
   labs(x = "NMDS1", y = "NMDS3") +
   plot_theme() +
@@ -1052,10 +1052,10 @@ p9 <- ggplot() +
                                 "Understory kelp, sampled with seine",
                                 "Mixed eelgrass, sampled with eDNA", 
                                 "Mixed eelgrass, sampled with seine"),
-                     values = c("#73A580", "#73A580",
-                                "#D16103", "#D16103",
+                     values = c("#327610", "#327610",
+                                "#E4572E", "#E4572E",
                                 "#E1AD01", "#E1AD01")) +
-  labs(x = "NMDS2", y = "NMDS3") +
+  labs(x = "NMDS2", y = "NMDS3") + 
   plot_theme() +
   guides(shape = guide_legend(override.aes = list(size = 3)),
          color = guide_legend(override.aes = list(size = 3))) +
@@ -1118,10 +1118,10 @@ p10 <- ggplot() +
                                 "Understory kelp, sampled with seine",
                                 "Mixed eelgrass, sampled with eDNA", 
                                 "Mixed eelgrass, sampled with seine"),
-                     values = c("#73A580", "#73A580",
-                                "#D16103", "#D16103",
+                     values = c("#327610", "#327610",
+                                "#E4572E", "#E4572E",
                                 "#E1AD01", "#E1AD01")) +
-  labs(x = "NMDS1", y = "NMDS2") +
+  labs(x = "NMDS1", y = "NMDS2") + 
   plot_theme() +
   guides(shape = guide_legend(override.aes = list(size = 3)),
          color = guide_legend(override.aes = list(size = 3))) +  
@@ -1171,10 +1171,10 @@ p11 <- ggplot() +
                                 "Understory kelp, sampled with seine",
                                 "Mixed eelgrass, sampled with eDNA", 
                                 "Mixed eelgrass, sampled with seine"),
-                     values = c("#73A580", "#73A580",
-                                "#D16103", "#D16103",
+                     values = c("#327610", "#327610",
+                                "#E4572E", "#E4572E",
                                 "#E1AD01", "#E1AD01")) +
-  labs(x = "NMDS1", y = "NMDS3") +
+  labs(x = "NMDS1", y = "NMDS3") + 
   plot_theme() +
   guides(shape = guide_legend(override.aes = list(size = 3)),
          color = guide_legend(override.aes = list(size = 3))) +
@@ -1223,10 +1223,10 @@ p12 <- ggplot() +
                                 "Understory kelp, sampled with seine",
                                 "Mixed eelgrass, sampled with eDNA", 
                                 "Mixed eelgrass, sampled with seine"),
-                     values = c("#73A580", "#73A580",
-                                "#D16103", "#D16103",
+                     values = c("#327610", "#327610",
+                                "#E4572E", "#E4572E",
                                 "#E1AD01", "#E1AD01")) +
-  labs(x = "NMDS2", y = "NMDS3") +
+  labs(x = "NMDS2", y = "NMDS3") + 
   plot_theme() +
   guides(shape = guide_legend(override.aes = list(size = 3)),
          color = guide_legend(override.aes = list(size = 3))) +
@@ -1315,7 +1315,7 @@ pcoa <- pcoa.bray$points %>%
                     #max.overlaps = getOption("ggrepel.max.overlaps", default = 17)) +
   scale_color_manual(name = "Habitat", 
                      labels = c("Eelgrass", "Understory kelp", "Mixed eelgrass"),
-                     values = c("#73A580","#D16103", "#E1AD01")) +
+                     values = c("#327610", "#E4572E", "#E1AD01")) +
   scale_linetype_manual(name = "Gear Type", 
                         labels = c("eDNA", "Beach seine"), 
                         values = c("solid", "dashed")) +
@@ -1434,7 +1434,7 @@ b1 <- ggplot() +
   #                    values = c("solid", "dashed")) +
   scale_color_manual(name = "Habitat",
                      labels = c("Eelgrass", "Understory kelp", "Mixed eelgrass"),
-                     values = c("#73A580","#D16103", "#E1AD01")) +
+                     values = c("#327610", "#E4572E", "#E1AD01")) +
   labs(x = "NMDS1", y = "NMDS2") +
   plot_theme_small() +
   guides(shape = guide_legend(override.aes = list(size = 3)),
@@ -1470,7 +1470,7 @@ b2 <- ggplot() +
   #                    values = c("solid", "dashed")) +
   scale_color_manual(name = "Habitat",
                      labels = c("Eelgrass", "Understory kelp", "Mixed eelgrass"),
-                     values = c("#73A580","#D16103", "#E1AD01")) +
+                     values = c("#327610", "#E4572E", "#E1AD01")) +
   labs(x = "NMDS1", y = "NMDS3") +
   plot_theme_small() +
   guides(shape = guide_legend(override.aes = list(size = 3)),
@@ -1506,7 +1506,7 @@ b3 <- ggplot() +
   #                    values = c("solid", "dashed")) +
   scale_color_manual(name = "Habitat",
                      labels = c("Eelgrass", "Understory kelp", "Mixed eelgrass"),
-                     values = c("#73A580","#D16103", "#E1AD01")) +
+                     values = c("#327610", "#E4572E", "#E1AD01")) +
   labs(x = "NMDS2", y = "NMDS3") +
   plot_theme_small() +
   guides(shape = guide_legend(override.aes = list(size = 3)),
@@ -1555,7 +1555,7 @@ b4 <- ggplot() +
                      values = c("solid", "dashed")) +
   scale_color_manual(name = "Habitat",
                      labels = c("Eelgrass", "Understory kelp", "Mixed eelgrass"),
-                     values = c("#73A580","#D16103", "#E1AD01")) +
+                     values = c("#327610", "#E4572E", "#E1AD01")) +
   labs(x = "NMDS1", y = "NMDS2") +
   plot_theme_small() +
   guides(shape = guide_legend(override.aes = list(size = 3)),
@@ -1589,7 +1589,7 @@ b5 <- ggplot() +
                      values = c("solid", "dashed")) +
   scale_color_manual(name = "Habitat",
                      labels = c("Eelgrass", "Understory kelp", "Mixed eelgrass"),
-                     values = c("#73A580","#D16103", "#E1AD01")) +
+                     values = c("#327610", "#E4572E", "#E1AD01")) +
   labs(x = "NMDS1", y = "NMDS3") +
   plot_theme_small() +
   guides(shape = guide_legend(override.aes = list(size = 3)),
@@ -1622,7 +1622,7 @@ b6 <- ggplot() +
                      values = c("solid", "dashed")) +
   scale_color_manual(name = "Habitat",
                      labels = c("Eelgrass", "Understory kelp", "Mixed eelgrass"),
-                     values = c("#73A580","#D16103", "#E1AD01")) +
+                     values = c("#327610", "#E4572E", "#E1AD01")) +
   labs(x = "NMDS2", y = "NMDS3") +
   plot_theme_small() +
   guides(shape = guide_legend(override.aes = list(size = 3)),
@@ -1690,7 +1690,7 @@ pcoa.bin <- pcoa.jacc$points %>%
                     #max.overlaps = getOption("ggrepel.max.overlaps", default = 17)) +
   scale_color_manual(name = "Habitat", 
                      labels = c("Eelgrass", "Understory kelp", "Mixed eelgrass"),
-                     values = c("#73A580","#D16103", "#E1AD01")) +
+                     values = c("#327610", "#E4572E", "#E1AD01")) +
   scale_linetype_manual(name = "Gear Type", 
                         labels = c("eDNA", "Beach seine"), 
                         values = c("solid", "dashed")) +
@@ -1737,7 +1737,7 @@ pcoa.type <- pcoa.jacc$points %>%
                     #max.overlaps = getOption("ggrepel.max.overlaps", default = 17)) +
   scale_color_manual(name = "Habitat", 
                      labels = c("Eelgrass", "Understory kelp", "Mixed eelgrass"),
-                     values = c("#73A580","#D16103", "#E1AD01")) +
+                     values = c("#327610", "#E4572E", "#E1AD01")) +
   scale_linetype_manual(name = "Gear Type", 
                         labels = c("eDNA", "Beach seine"), 
                         values = c("solid", "dashed")) +
