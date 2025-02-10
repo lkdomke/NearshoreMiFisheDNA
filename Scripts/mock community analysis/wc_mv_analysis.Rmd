@@ -491,7 +491,7 @@ p.val # p.val for the three informative pairwise values
 
 #visualize
 ## nmds
-```{r}
+```{r eval=FALSE, include=FALSE}
 nmds <- metaMDS(bray.wide, k = 2, autotransform = FALSE, trymax = 999)
 nmds$stres # higher stress 27%; not the best fit in two dimensions
 stressplot(nmds) # not the most idea... 
@@ -505,7 +505,7 @@ ordiellipse(nmds, site.info2$intx)
 
 ### 3 axes nmds
 nmds w/ three axes
-```{r}
+```{r eval=FALSE, include=FALSE}
 nmds3 <- metaMDS(bray.wide, k = 3, autotransform = FALSE, trymax = 999)
 nmds3$stres # stress acceptable at 20.1%
 stressplot(nmds3) # better...
@@ -517,7 +517,7 @@ ordiellipse(nmds3, site.info2$intx)
 ```
 
 Extract scores
-```{r}
+```{r eval=FALSE, include=FALSE}
 # extract scores from the nmds
 scrs3 <- as.data.frame(scores(nmds3, display = 'sites'))
 scrs3 <- cbind(as.data.frame(scrs3), intx = site.info2$intx)
@@ -557,7 +557,7 @@ scrs.edna <- scrs3 %>%
 
 ### 3 axes w/o species
 remake without the species vectors
-```{r}
+```{r eval=FALSE, include=FALSE}
 w1 <- ggplot() +
     geom_point(data = scrs3, aes(x = NMDS1, y = NMDS2, 
                                color = as.factor(habitat), shape = as.factor(type)),
@@ -653,7 +653,7 @@ plot_novector <- w1 + w2 + w3 + guide_area() +
 ```
 
 ### 3d nmds w/ colored ellipses
-```{r}
+```{r eval=FALSE, include=FALSE}
 w4 <- ggplot() +
     geom_point(data = scrs3, aes(x = NMDS1, y = NMDS2, 
                                color = as.factor(intx), shape = as.factor(intx)),
@@ -814,6 +814,7 @@ plot_singlelegend <- w4 + w5 + w6 + guide_area() +
 #        width = 12, height = 12)
 ```
 
+
 ## pcoa
 ```{r}
 pcoa.bray <- cmdscale(bray.wide, eig = T)
@@ -840,8 +841,8 @@ pcoa <- pcoa.bray$points %>%
   as_tibble(rownames = "bay_year") %>%
   left_join(site.info2) %>%
   ggplot(aes(x = pcoa1, y = pcoa2, color = habitat, shape = type)) +
-  geom_hline(aes(yintercept = 0), linetype = "dashed", linewidth = 0.5) +
-  geom_vline(aes(xintercept = 0), linetype = "dashed", linewidth = 0.5) +
+  # geom_hline(aes(yintercept = 0), linetype = "dashed", linewidth = 0.5) +
+  # geom_vline(aes(xintercept = 0), linetype = "dashed", linewidth = 0.5) +
   # geom_polygon(aes(x = pcoa1, y = pcoa2, group = bay_year2),
   #              fill = "lightgray", alpha = 0.6,
   #              data = {pcoa.bray$points %>% as_tibble(rownames = "bay_year") %>%
@@ -853,7 +854,7 @@ pcoa <- pcoa.bray$points %>%
                inherit.aes=FALSE, linewidth = 1) +  # add arrows
   geom_label_repel(data = pcoa.sp.dat.sig,
                    aes(x = pcoa1, y = pcoa2, label = sp_code),
-                   size = 4, inherit.aes = FALSE) +
+                   size = 5, inherit.aes = FALSE) +
                    #nudge_x = ifelse(vec.sp.dat.sig3$MDS1 >= 0, 0.2, -0.2), 
                    #nudge_y = ifelse(vec.sp.dat.sig3$MDS2 >= 0, 0.2, -0.2),
                     #max.overlaps = getOption("ggrepel.max.overlaps", default = 17)) +
@@ -877,7 +878,7 @@ pcoa
 ```
 
 # SIMPER Analysis
-```{r}
+```{r eval=FALSE, include=FALSE}
 sim <- simper(std.wide, site.info2$intx, permutations = 999)
 sum <- summary(sim)
 # habitat differences
@@ -1112,7 +1113,7 @@ unique(indic.sign.bh$comb)
 
 ### indic sp plots
 ```{r}
-sp.palette <- hcl.colors(18)
+# sp.palette <- hcl.colors(18)
 
 # create a loop that goes through each combination and pulls abundance data so its in a single dataframe, we can then facet wrap by combination
 indic.dat <- data.frame()
@@ -1131,68 +1132,70 @@ for(i in unique(indic.sign.bh$index)){
 
 
 p1 <- indic.dat %>%
-  filter(comb %in% c("eelgrass_edna+kelp_edna+mixed_edna", 
+  filter(comb %in% c("eelgrass_edna+eelgrass_seine",
+                     "eelgrass_edna+kelp_edna+mixed_edna", 
                              "eelgrass_seine+kelp_seine+mixed_seine")) %>%
   mutate(comb = ifelse(comb == "eelgrass_edna+kelp_edna+mixed_edna",
                        "All habitats eDNA", 
                        ifelse(comb == "eelgrass_seine+kelp_seine+mixed_seine",
-                              "All habitats seine", comb))) %>%
+                              "All habitats seine", 
+                              ifelse(comb == "eelgrass_edna+eelgrass_seine",
+                                     "Eelgrass: eDNA & seine", comb)))) %>%
   ggplot() +
-  geom_boxplot(mapping = aes(x = name, y = value, fill = name)) +
+  geom_boxplot(mapping = aes(x = name, y = value), fill = "lightgray") +
   labs(x = NULL, y = "Proportional abundance",
-       fill = "Scientific Name") +
-  scale_fill_manual(values = sp.palette) +
+       fill = "Scientific Name", subtitle = "a") +
+  #scale_fill_manual(values = sp.palette) +
   plot_theme() +
   theme(legend.position = "none",
-        #axis.text.x = element_text(angle = 45, hjust = 1)
+        axis.text.x = element_text(size = 18),
+        strip.text = element_text(size = 18)
         ) +
   facet_row(~comb, scales = "free", space = "free") 
 
 p1
 
 p2 <- indic.dat %>%
-  filter(comb %in% c("kelp_seine", "mixed_seine",
-                     "kelp_seine+mixed_seine")) %>%
+  filter(comb %in% c("kelp_seine",
+                     "kelp_seine+mixed_seine", "eelgrass_seine+mixed_seine")) %>%
   mutate(comb = ifelse(comb == "kelp_seine",
-                       "Seine: understory kelp", 
-                       ifelse(comb == "mixed_seine",
-                              "Seine: mixed eelgrass", 
-                               ifelse(comb == "kelp_seine+mixed_seine",
-                                     "Seine: kelp & mixed eelgrass", comb)))) %>%
+                       "Seine: kelp",
+                       ifelse(comb == "kelp_seine+mixed_seine",
+                              "Seine: kelp & mixed", 
+                              ifelse(comb == "eelgrass_seine+mixed_seine",
+                                            "Seine: eelgrass & mixed", comb)))) %>%
   ggplot() +
-  geom_boxplot(mapping = aes(x = name, y = value, fill = name)) +
+  geom_boxplot(mapping = aes(x = name, y = value), fill = "lightgray") +
   labs(x = NULL, y = "Proportional abundance",
-       fill = "Scientific Name") +
-  scale_fill_manual(values = sp.palette) +
+       fill = "Scientific Name", subtitle = "b") +
+  #scale_fill_manual(values = sp.palette) +
   plot_theme() +
   theme(legend.position = "none",
-        #axis.text.x = element_text(angle = 45, hjust = 1)
+        axis.text.x = element_text(size = 18),
+        strip.text = element_text(size = 18),
         ) +
   facet_row(~comb, scales = "free", space = "free") 
 
 p2
 
 p3 <- indic.dat %>%
-  filter(comb %in% c("eelgrass_edna",
-                     "eelgrass_edna+kelp_edna",
-                     "eelgrass_edna+eelgrass_seine", 
-                     "eelgrass_seine+mixed_seine")) %>%
+  filter(comb %in% c("eelgrass_edna", "mixed_seine",
+                     "eelgrass_edna+kelp_edna")) %>%
   mutate(comb = ifelse(comb == "eelgrass_edna",
                        "eDNA: eelgrass", 
                        ifelse(comb == "eelgrass_edna+kelp_edna",
                               "eDNA: eelgrass & kelp", 
-                              ifelse(comb == "eelgrass_edna+eelgrass_seine",
-                                     "Eelgrass: eDNA & seine", 
-                                     ifelse(comb == "eelgrass_seine+mixed_seine",
-                                            "Seine: eelgrass & mixed eelgrass", comb))))) %>%
+                              ifelse(comb == "mixed_seine",
+                                     "Seine: mixed", comb)))) %>%
   ggplot() +
-  geom_boxplot(mapping = aes(x = name, y = value, fill = name)) +
+  geom_boxplot(mapping = aes(x = name, y = value), fill = "lightgray") +
   labs(x = "Indicator species scientific name", y = "Proportional abundance",
        fill = "Scientific Name") +
-  scale_fill_manual(values = sp.palette) +
+  #scale_fill_manual(values = sp.palette) +
   plot_theme() +
   theme(legend.position = "none",
-        #axis.text.x = element_text(angle = 45, hjust = 1)
+        axis.text.x = element_text(size = 18),
+        strip.text = element_text(size = 18)
         ) +
   facet_row(~comb, scales = "free", space = "free") 
 
@@ -1200,11 +1203,16 @@ p3
 
 
 indicator <- p1 / p2 / p3 +
-  plot_layout(axes = "collect_y")
+  plot_layout(axes = "collect_y") #+
+  plot_annotation(tag_levels = "a")
 
 # ggsave(filename = "Images/wc_indicator_sp.png",
 #        plot = indicator,
 #        height = 12, width = 18)
+
+# ggsave(filename = "Images/wc_indicator_sp.png",
+#        plot = indicator,
+#        height = 14, width = 22)
 
 
 

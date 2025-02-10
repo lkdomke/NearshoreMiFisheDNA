@@ -161,10 +161,13 @@ main_map <- ggplot() +
   geom_sf_label(labels.prj, mapping = aes(label = Text), family = "Calibri", size = 6) +
   plot_theme() +
   theme(legend.position = "inside",
-        legend.position.inside = c(0.12,0.1),
+        legend.position.inside = c(0.12,0.15),
         #legend.text = element_markdown(size = 15),
         legend.spacing.y = unit(0, "cm"),
-        axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+        axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+  annotation_scale(text_family = "Calibri", text_cex = 1.5, line_width = 2) +
+  annotation_north_arrow(which_north = "true", location = "bl", height = unit(2, "cm"),
+                         pad_x = unit(7,"cm"), pad_y = unit(1, "cm"))
 
 #main_map
 ```
@@ -178,7 +181,7 @@ final <- main_map + inset_element(inset, 0.64, 0.64, 1, 1, align_to = "plot", ig
 
 # ggsave(filename = "Images/map_figure.png",
 #        plot = final,
-#        height = 16, 
+#        height = 16,
 #        width = 12)
 ```
 
