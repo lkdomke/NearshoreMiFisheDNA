@@ -349,7 +349,7 @@ pull out species names
 sp <- long %>%
   distinct(name)
 
-write.csv(sp, "Data/species_name_comb.csv")
+#write.csv(sp, "Data/species_name_comb.csv")
 ```
 
 
