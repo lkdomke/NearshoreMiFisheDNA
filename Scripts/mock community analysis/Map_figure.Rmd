@@ -81,19 +81,23 @@ ak.small <- subset(usa, name == "Alaska") %>% # Subset ak from the usa object fo
 canada.crop <- st_transform(canada, crs = st_crs(26908)) %>%
   st_crop(., sf::st_bbox(ak.small))
 
+canada.crop2 <- st_transform(canada, crs = st_crs(26908))
 
+plot(canada.crop2$geometry)
+drawExtent()
 inset <- ggplot() +
   geom_sf(ak.small, mapping = aes(), fill = "#999999", color = "black") +
-  geom_sf(canada.crop, mapping = aes(), fill = "#5e5e5e", color = "black") +
-  coord_sf(xlim = c(-2003837, 946671), ylim = c(5964637, 8153307), 
-           expand = FALSE) + # controlling axis to disregard dateline
+  geom_sf(canada.crop2, mapping = aes(), fill = "#5e5e5e", color = "black") +
+  coord_sf(xlim = c(-68204, 1149204), ylim = c(5646690, 6662975)) +
+  # coord_sf(xlim = c(-2003837, 946671), ylim = c(5964637, 8153307), 
+  #          expand = FALSE) + # controlling axis to disregard dateline
   geom_rect(aes(xmin = sf::st_bbox(st_transform(sites, crs = st_crs(26908)))[c(1)],
                 xmax = sf::st_bbox(st_transform(sites, crs = st_crs(26908)))[c(3)],
                 ymin = sf::st_bbox(st_transform(sites, crs = st_crs(26908)))[c(2)],
                 ymax = sf::st_bbox(st_transform(sites, crs = st_crs(26908)))[c(4)]),
             color = "red", fill = NA, linewidth = 2) + # creates red box around region equavalent to the spatial extent of sitesobj1 bbox
-  geom_text(mapping = aes(x = -365742.4, y = 7333075), label = "Alaska", size = 4) +
-  geom_text(mapping = aes(x = 489556.3, y = 7021835), label = "Canada", size = 4) + #7021835
+  geom_text(mapping = aes(x = 200000, y = 6233075), label = "Southeast \n Alaska", size = 5) +
+  geom_text(mapping = aes(x = 899556.3, y = 6421835), label = "Canada", size = 5) + #7021835
   theme_classic() +
   theme(axis.title = element_blank(),  # Removing remnants of axis title, text, tick marks,
         axis.text = element_blank(),  # lines, and changing plot background to transparent,
@@ -105,6 +109,8 @@ inset <- ggplot() +
   #ggsn::scalebar(location = "bottomleft", dist = 500, dist_unit = "km", transform = F,
   #               x.min = -1554768, x.max = -183173.4, y.min = 6035655, y.max = 6209974, 
   #               st.bottom = FALSE, height = 0.3, st.dist = 0.5, st.size = 6)
+
+inset
 ```
 
 main map prep
@@ -177,9 +183,9 @@ together!
 ```{r}
 
 
-final <- main_map + inset_element(inset, 0.64, 0.64, 1, 1, align_to = "plot", ignore_tag = TRUE)
-
-# ggsave(filename = "Images/map_figure.png",
+final <- main_map + inset_element(inset, 0.66, 0.66, 1, 1, align_to = "plot", ignore_tag = TRUE)
+# final
+# ggsave(filename = "Images/map_figure_adj.png",
 #        plot = final,
 #        height = 16,
 #        width = 12)
