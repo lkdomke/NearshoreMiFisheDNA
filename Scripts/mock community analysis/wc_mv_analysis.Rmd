@@ -827,6 +827,8 @@ pe <- format(round(percent_explained[1:2], digits = 1), nsmall = 1, trim = T)
 pcoalabs <- as.list(c(glue::glue("PCoA 1 ({pe[1]}%)"),
           glue::glue("PcoA 2 ({pe[2]}%)")))
 
+barplot(pcoa.bray$eig, names = paste ('PCoA', 1:137), las = 3, ylab = 'eigenvalues')
+
 # create species vectors w/ envfit
 pcoa.sp <- envfit(as.data.frame(pcoa.bray$points),
                   std.wide[,1:70], perm = 999)
