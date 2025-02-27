@@ -66,6 +66,9 @@ seine.info <- read.csv("Data/seine_biomass_at_edna_sites.csv") %>%
          habitat = ifelse(bay_year == "SFEI_A_2022", "eelgrass", habitat))
 
 sites <- st_as_sf(seine.info, coords = c("longitude", "latitude"), crs = 4326)
+
+table(seine.info$habitat)
+
 ```
 
 
