@@ -1110,7 +1110,7 @@ indic.sign.bh <- indic.sign[p.value.bh <=0.05] %>%
   separate(comb,sep = "\\+", into = c("intx1", "intx2", "intx3"), remove = F)
 
 unique(indic.sign.bh$comb)
-
+#write.csv(indic, "indicator_species_all.csv")
 ```
 
 ### indic sp plots
@@ -1233,6 +1233,32 @@ indicator <- p1 / p2 / p3 +
 Next we want to create a figure that looks at seine data and plot what it looks like to have
 species proportion on the x axis and species abundance on the y axis 
 facet_wrap by hab
+
+## heatmap of indicator 
+```{r}
+indic.sign.bh %>%
+  ggplot() +
+  geom_tile(aes(x = as.factor(index), y = rn, fill = stat))
+
+indic.sign.bh %>%
+  distinct(index, comb)
+
+head(indic$str) # this is the statistic (indicator value sqrt(A*B))
+# this is for all combinations of species and gear/habitat combinations
+indic$str %>% 
+  as.data.frame() %>%
+  rownames_to_column(var = "rn") %>%
+  filter(rn %in% c(indic.sign.bh$rn)) %>%
+  pivot_longer(cols = c("eelgrass_edna":"eelgrass_seine+kelp_seine+mixed_seine"),
+               names_to = "comb", values_to = "stat") %>%
+  left_join(indic.sign.bh)
+  ggplot() +
+  geom_tile(aes(x = as.factor(combinations), y = rn, fill = stat)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# subset the species by the ones that are significant 
+```
+
 
 
 #compare seine prop to abund
