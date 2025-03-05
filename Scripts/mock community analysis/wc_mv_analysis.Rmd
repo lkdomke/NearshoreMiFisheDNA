@@ -1251,7 +1251,7 @@ indic$str %>%
   filter(rn %in% c(indic.sign.bh$rn)) %>%
   pivot_longer(cols = c("eelgrass_edna":"eelgrass_seine+kelp_seine+mixed_seine"),
                names_to = "comb", values_to = "stat") %>%
-  left_join(indic.sign.bh)
+  left_join(indic.sign.bh) %>%
   ggplot() +
   geom_tile(aes(x = as.factor(combinations), y = rn, fill = stat)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
