@@ -1318,13 +1318,13 @@ isa.plot<- ggplot() +
   theme(strip.placement = "outside") +
   facet_row("nested", strip.position = "bottom", scales = "free_x",
              space = "free") +
-  theme(strip.background = element_rect(fill = "transparent"),
+  theme(strip.background = element_rect(fill = "transparent", color = "gray"),
         strip.text = element_text(size = 22),
         axis.text.x = element_text(size = 20),
         axis.text.y = element_text(size = 20),
         axis.title.x = element_text(size = 22),
         axis.title.y = element_text(size = 22))
-  
+isa.plot  
 
 # subset the species by the ones that are significant 
 #ggsave(plot = isa.plot, filename = "Images/draft_isa_plot.png", width = 14, height = 8)
