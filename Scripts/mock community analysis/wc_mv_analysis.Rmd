@@ -193,7 +193,7 @@ site.info <- edna.info %>%
 # WHOLE COMMUNITY
 ## Remove extra df
 ```{r}
-rm(list = ls()[!ls() %in% c("edna.red", "seine", "site.info", "plot_theme",
+rm(list = ls()[!ls() %in% c("edna.red", "seine", "site.info", "plot_theme", "plot_theme_bw",
                             "add_global_label", "plot_theme_small")])
 ```
 
@@ -1390,4 +1390,98 @@ ggplot(seine.both) +
 
 
 ```
+
+# heatmap of raw relative abundances
+```{r}
+# long dataframe has both edna and seine in their relative abundances (so seine data was changed from raw to relative)
+names(long)
+
+# all species, average relative abundance
+all.sp.heat <- long %>%
+  # group_by(name, type) %>%
+  # dplyr::summarize(avg = mean(value)) %>%
+  ggplot() + 
+  geom_tile(aes(x = bay_year, y = reorder(name, -value), 
+                fill = value), color = "black") +
+  scale_fill_continuous(type = "viridis") +
+  plot_theme_small() +
+  facet_row("intx", strip.position = "bottom", scales = "free_x",
+             space = "free") +
+  labs(y = "Species names", x = "Sites grouped by gear and habitat type",
+       fill = "Relative\n abundance") +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_text(size = 20))
+
+# ggsave(filename = "Images/Relative_abund_heatmap_sites.jpg",
+#        plot = all.sp.heat, width = 22, height = 14)
+```
+
+More abundant species
+```{r}
+# sums <- long %>%
+#   group_by(intx, name) %>%
+#   dplyr::summarise(sums = sum(value))
+
+habs <- as.data.frame(distinct(long, habitat)) %>%
+  mutate(habitat = as.character(habitat))
+
+heatmaps <- list()
+
+#i <- 3
+
+for(i in 1:length(habs$habitat)){
+  hab <- habs[i,] # filter by habitat
+  dat <- filter(long, habitat == hab) %>%
+    pivot_wider(id_cols = c(bay_year, bay_year2, intx, habitat, type, date,
+                         julian, latitude, longitude, year),
+                names_from = name, values_from = value)
+  
+  non.zero.sp <- as.data.frame(x = colSums(dat[,-c(1:10)]) == 0) %>%
+    dplyr::rename(TF= "colSums(dat[, -c(1:10)]) == 0") %>%
+    filter(TF == "FALSE") %>%
+    rownames_to_column(var = "sp")
+  
+  dat.red <- dat %>%
+    pivot_longer(names_to = "name", values_to = "value",
+                 cols = -c("bay_year", "bay_year2", "intx", "habitat",
+                           "type", "date", "julian", "latitude", "longitude", "year")) %>%
+    subset(., name %in% c(non.zero.sp$sp)) %>%
+    mutate(zeros = ifelse(value == 0, "0", NA))
+
+  plot <- ggplot(dat.red) + 
+    geom_tile(aes(x = bay_year, y = reorder(name, -value), 
+                  fill = value), color = "black") +
+    geom_text(aes(x = bay_year, y = reorder(name, value),
+                  label = zeros), color = "#555555") +
+    scale_fill_continuous(type = "viridis") +
+    plot_theme_small() +
+    facet_row("intx", strip.position = "bottom", scales = "free_x",
+               space = "free") +
+    labs(y = "Species names", x = "Sites grouped by gear and habitat type",
+         fill = "Relative\n abundance") +
+    theme(axis.text.x = element_blank(),
+          axis.text.y = element_text(size = 18))
+  
+  heatmaps[[i]] <- plot
+  
+}
+
+# ggsave(plot = heatmaps[[1]], height = 12, width = 16,
+#        filename = "Images/Eelg_relative_abund_heat.jpg") 
+# ggsave(plot = heatmaps[[2]], height = 12, width = 16,
+#        filename = "Images/Kelp_relative_abund_heat.jpg")
+# ggsave(plot = heatmaps[[3]], height = 12, width = 16, 
+#        filename = "Images/Mixed_relative_abund_heat.jpg")
+```
+
+
+
+
+
+
+
+
+
+
+
 
