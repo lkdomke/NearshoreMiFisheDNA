@@ -86,8 +86,8 @@ canada.crop <- st_transform(canada, crs = st_crs(26908)) %>%
 
 canada.crop2 <- st_transform(canada, crs = st_crs(26908))
 
-plot(canada.crop2$geometry)
-drawExtent()
+# plot(canada.crop2$geometry)
+# drawExtent()
 inset <- ggplot() +
   geom_sf(ak.small, mapping = aes(), fill = "#999999", color = "black") +
   geom_sf(canada.crop2, mapping = aes(), fill = "#5e5e5e", color = "black") +
@@ -192,5 +192,18 @@ final <- main_map + inset_element(inset, 0.66, 0.66, 1, 1, align_to = "plot", ig
 #        plot = final,
 #        height = 16,
 #        width = 12)
+```
+
+
+Just a map of alaska
+```{r}
+# world <- ne_countries(scale = 10, returnclass = "sf")
+# usa <- ne_states("United States of America", returnclass = "sf") # simple features
+# ak.small <- subset(usa, name == "Alaska") %>% # Subset ak from the usa object for small AK inset
+#   st_transform(., crs = st_crs(26908))
+# 
+# ggplot() +
+#   geom_sf(ak.small, mapping = aes()) +
+#   theme_classic()
 ```
 

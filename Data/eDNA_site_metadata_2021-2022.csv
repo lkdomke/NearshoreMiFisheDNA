@@ -1,0 +1,103 @@
+"","bay_year","bay_year2","type","habitat","place_name","date","latitude","longitude"
+"1","2021_BOST_A_1","BOST_A_2021","edna","eelgrass","Bostwick Inlet",2021-08-11,55.236796,-131.750555
+"2","2021_BOST_A_2","BOST_A_2021","edna","eelgrass","Bostwick Inlet",2021-08-11,55.236796,-131.750555
+"3","2021_BOST_A_3","BOST_A_2021","edna","eelgrass","Bostwick Inlet",2021-08-11,55.236796,-131.750555
+"4","2021_BOST_B_1","BOST_B_2021","edna","kelp","Bostwick Inlet",2021-08-12,55.219938,-131.735973
+"5","2021_BOST_B_2","BOST_B_2021","edna","kelp","Bostwick Inlet",2021-08-12,55.219938,-131.735973
+"6","2021_BOST_B_3","BOST_B_2021","edna","kelp","Bostwick Inlet",2021-08-12,55.219938,-131.735973
+"7","2021_DALL_A_1","DALL_A_2021","edna","eelgrass","Dall bay",2021-06-14,55.156451,-131.749909
+"8","2021_DALL_A_2","DALL_A_2021","edna","eelgrass","Dall bay",2021-06-14,55.156451,-131.749909
+"9","2021_DALL_A_3","DALL_A_2021","edna","eelgrass","Dall bay",2021-06-14,55.156451,-131.749909
+"10","2021_DALL_B_1","DALL_B_2021","edna","kelp","Dall bay",2021-06-15,55.155254,-131.742113
+"11","2021_DALL_B_2","DALL_B_2021","edna","kelp","Dall bay",2021-06-15,55.155254,-131.742113
+"12","2021_DALL_B_3","DALL_B_2021","edna","kelp","Dall bay",2021-06-15,55.155254,-131.742113
+"13","2021_HUNT_A_1","HUNT_A_2021","edna","eelgrass","Hunter Bay",2021-06-28,54.872263,-132.308073
+"14","2021_HUNT_A_2","HUNT_A_2021","edna","eelgrass","Hunter Bay",2021-06-28,54.872263,-132.308073
+"15","2021_HUNT_A_3","HUNT_A_2021","edna","eelgrass","Hunter Bay",2021-06-28,54.872263,-132.308073
+"16","2021_KAHS_A_1","KAHS_A_2021","edna","eelgrass","Kah shakes",2021-06-11,55.0426,-130.9995
+"17","2021_KAHS_A_2","KAHS_A_2021","edna","eelgrass","Kah shakes",2021-06-11,55.0426,-130.9995
+"18","2021_KAHS_A_3","KAHS_A_2021","edna","eelgrass","Kah shakes",2021-06-11,55.0426,-130.9995
+"19","2021_KAHS_B_1","KAHS_B_2021","edna","kelp","Kah shakes",2021-06-12,55.066147,-130.989508
+"20","2021_KAHS_B_2","KAHS_B_2021","edna","kelp","Kah shakes",2021-06-12,55.066147,-130.989508
+"21","2021_KAHS_B_3","KAHS_B_2021","edna","kelp","Kah shakes",2021-06-12,55.066147,-130.989508
+"22","2021_MOIR_A_1","MOIR_A_2021","edna","eelgrass","Moira sound",2021-06-22,54.9711,-132.0924
+"23","2021_MOIR_A_2","MOIR_A_2021","edna","eelgrass","Moira sound",2021-06-22,54.9711,-132.0924
+"24","2021_MOIR_A_3","MOIR_A_2021","edna","eelgrass","Moira sound",2021-06-22,54.9711,-132.0924
+"25","2021_MOIR_B_1","MOIR_B_2021","edna","kelp","Moira sound",2021-06-24,54.985511,-132.109731
+"26","2021_MOIR_B_2","MOIR_B_2021","edna","kelp","Moira sound",2021-06-24,54.985511,-132.109731
+"27","2021_MOIR_B_3","MOIR_B_2021","edna","kelp","Moira sound",2021-06-24,54.985511,-132.109731
+"28","2021_NICH_A_1","NICH_A_2021","edna","eelgrass","Nichols Bay",2021-06-26,54.740107,-132.153373
+"29","2021_NICH_A_2","NICH_A_2021","edna","eelgrass","Nichols Bay",2021-06-26,54.740107,-132.153373
+"30","2021_NICH_B_1","NICH_B_2021","edna","kelp","Nichols Bay",2021-06-25,54.726046,-132.124284
+"31","2021_NICH_B_2","NICH_B_2021","edna","kelp","Nichols Bay",2021-06-25,54.726046,-132.124284
+"32","2021_NICH_B_3","NICH_B_2021","edna","kelp","Nichols Bay",2021-06-25,54.726046,-132.124284
+"33","2021_REEF_A_1","REEF_A_2021","edna","eelgrass","Reef harbor",2021-06-10,54.9684,-131.2492
+"34","2021_REEF_A_2","REEF_A_2021","edna","eelgrass","Reef harbor",2021-06-10,54.9684,-131.2492
+"35","2021_REEF_A_3","REEF_A_2021","edna","eelgrass","Reef harbor",2021-06-10,54.9684,-131.2492
+"36","2021_REEF_B_1","REEF_B_2021","edna","kelp","Reef harbor",2021-06-13,54.974693,-131.255107
+"37","2021_REEF_B_2","REEF_B_2021","edna","kelp","Reef harbor",2021-06-13,54.974693,-131.255107
+"38","2021_REEF_B_3","REEF_B_2021","edna","kelp","Reef harbor",2021-06-13,54.974693,-131.255107
+"39","2021_SYLB_A_1","SYLB_A_2021","edna","eelgrass","Sylburn harbor",2021-06-08,55.179058,-131.582105
+"40","2021_SYLB_A_3","SYLB_A_2021","edna","eelgrass","Sylburn harbor",2021-06-08,55.179058,-131.582105
+"41","2021_SYLB_B_1","SYLB_B_2021","edna","kelp","Sylburn harbor",2021-06-09,55.176,-131.5972
+"42","2021_SYLB_B_2","SYLB_B_2021","edna","kelp","Sylburn harbor",2021-06-09,55.176,-131.5972
+"43","2021_SYLB_B_3","SYLB_B_2021","edna","kelp","Sylburn harbor",2021-06-09,55.176,-131.5972
+"44","2021_TAHB_A_2","TAHB_A_2021","edna","eelgrass","Tah Bay",2021-06-27,54.830481,-132.286086
+"45","2021_TAHB_A_3","TAHB_A_2021","edna","eelgrass","Tah Bay",2021-06-27,54.830481,-132.286086
+"46","2022_ABES_A_1","ABES_A_2022","edna","eelgrass","Abbess Island",2022-07-18,55.554811,-133.174355
+"47","2022_ABES_A_2","ABES_A_2022","edna","eelgrass","Abbess Island",2022-07-18,55.554811,-133.174355
+"48","2022_ABES_A_3","ABES_A_2022","edna","eelgrass","Abbess Island",2022-07-18,55.554811,-133.174355
+"49","2022_BLAQ_A_1","BLAQ_A_2022","edna","mixed","Blanquizal Point",2022-07-02,55.62082,-133.38664
+"50","2022_BLAQ_A_2","BLAQ_A_2022","edna","mixed","Blanquizal Point",2022-07-02,55.62082,-133.38664
+"51","2022_BLAQ_A_3","BLAQ_A_2022","edna","mixed","Blanquizal Point",2022-07-02,55.62082,-133.38664
+"52","2022_CLAM_A_1","CLAM_A_2022","edna","mixed","Clam island",2022-06-27,55.517981,-133.158075
+"53","2022_CLAM_A_2","CLAM_A_2022","edna","mixed","Clam island",2022-06-27,55.517981,-133.158075
+"54","2022_CLAM_A_3","CLAM_A_2022","edna","mixed","Clam island",2022-06-27,55.517981,-133.158075
+"55","2022_GUKT_A_1","GUKT_A_2022","edna","eelgrass","Guktu Bay",2022-07-12,55.739816,-133.312022
+"56","2022_GUKT_A_2","GUKT_A_2022","edna","eelgrass","Guktu Bay",2022-07-12,55.739816,-133.312022
+"57","2022_GUKT_A_3","GUKT_A_2022","edna","eelgrass","Guktu Bay",2022-07-12,55.739816,-133.312022
+"58","2022_HALI_A_1","HALI_A_2022","edna","mixed","Halibut Nose",2022-07-26,55.216791,-132.969439
+"59","2022_HALI_A_2","HALI_A_2022","edna","mixed","Halibut Nose",2022-07-26,55.216791,-132.969439
+"60","2022_HALI_A_3","HALI_A_2022","edna","mixed","Halibut Nose",2022-07-26,55.216791,-132.969439
+"61","2022_HARM_A_1","HARM_A_2022","edna","mixed","Harmony island",2022-07-01,55.719394,-133.40571
+"62","2022_HARM_A_2","HARM_A_2022","edna","mixed","Harmony island",2022-07-01,55.719394,-133.40571
+"63","2022_HARM_A_3","HARM_A_2022","edna","mixed","Harmony island",2022-07-01,55.719394,-133.40571
+"64","2022_ILDE_A_1","ILDE_A_2022","edna","mixed","Point Ildefonso",2022-06-26,55.577071,-133.26439
+"65","2022_ILDE_A_2","ILDE_A_2022","edna","mixed","Point Ildefonso",2022-06-26,55.577071,-133.26439
+"66","2022_ILDE_A_3","ILDE_A_2022","edna","mixed","Point Ildefonso",2022-06-26,55.577071,-133.26439
+"67","2022_KARH_A_1","KARH_A_2022","edna","mixed","Karheen",2022-07-27,55.789869,-133.32157
+"68","2022_KARH_A_2","KARH_A_2022","edna","mixed","Karheen",2022-07-27,55.789869,-133.32157
+"69","2022_KARH_A_3","KARH_A_2022","edna","mixed","Karheen",2022-07-27,55.789869,-133.32157
+"70","2022_KLWA_A_1","KLWA_A_2022","edna","eelgrass","Klawock Airport",2022-07-25,55.577767,-133.0941
+"71","2022_KLWA_A_2","KLWA_A_2022","edna","eelgrass","Klawock Airport",2022-07-25,55.577767,-133.0941
+"72","2022_KLWA_A_3","KLWA_A_2022","edna","eelgrass","Klawock Airport",2022-07-25,55.577767,-133.0941
+"73","2022_NATZ_A_1","NATZ_A_2022","edna","eelgrass","Natzuhini Bay",2022-07-15,55.25051,-132.883
+"74","2022_NATZ_A_2","NATZ_A_2022","edna","eelgrass","Natzuhini Bay",2022-07-15,55.25051,-132.883
+"75","2022_NATZ_A_3","NATZ_A_2022","edna","eelgrass","Natzuhini Bay",2022-07-15,55.25051,-132.883
+"76","2022_NFEI_A_1","NFEI_A_2022","edna","eelgrass","North Fish Egg Island",2022-07-17,55.49709,-133.17
+"77","2022_NFEI_A_2","NFEI_A_2022","edna","eelgrass","North Fish Egg Island",2022-07-17,55.49709,-133.17
+"78","2022_NFEI_A_3","NFEI_A_2022","edna","eelgrass","North Fish Egg Island",2022-07-17,55.49709,-133.17
+"79","2022_NOSK_A_1","NOSK_A_2022","edna","eelgrass","Nossuk Bay",2022-07-13,55.7073,-133.342
+"80","2022_NOSK_A_2","NOSK_A_2022","edna","eelgrass","Nossuk Bay",2022-07-13,55.7073,-133.342
+"81","2022_NOSK_A_3","NOSK_A_2022","edna","eelgrass","Nossuk Bay",2022-07-13,55.7073,-133.342
+"82","2022_NSTP_A_1","NSTP_A_2022","edna","mixed","North St. Philips",2022-07-03,55.665754,-133.40493
+"83","2022_NSTP_A_2","NSTP_A_2022","edna","mixed","North St. Philips",2022-07-03,55.665754,-133.40493
+"84","2022_NSTP_A_3","NSTP_A_2022","edna","mixed","North St. Philips",2022-07-03,55.665754,-133.40493
+"85","2022_REFU_A_1","REFU_A_2022","edna","eelgrass","Port Refugio",2022-07-16,55.282137,-133.334028
+"86","2022_REFU_A_2","REFU_A_2022","edna","eelgrass","Port Refugio",2022-07-16,55.282137,-133.334028
+"87","2022_REFU_A_3","REFU_A_2022","edna","eelgrass","Port Refugio",2022-07-16,55.282137,-133.334028
+"88","2022_ROSA_A_1","ROSA_A_2022","edna","eelgrass","Rosary",2022-06-28,55.577046,-133.29498
+"89","2022_ROSA_A_2","ROSA_A_2022","edna","eelgrass","Rosary",2022-06-28,55.577046,-133.29498
+"90","2022_ROSA_A_3","ROSA_A_2022","edna","eelgrass","Rosary",2022-06-28,55.577046,-133.29498
+"91","2022_SARI_A_1","SARI_A_2022","edna","mixed","Santa Rita",2022-06-30,55.418589,-133.45424
+"92","2022_SARI_A_2","SARI_A_2022","edna","mixed","Santa Rita",2022-06-30,55.418589,-133.45424
+"93","2022_SARI_A_3","SARI_A_2022","edna","mixed","Santa Rita",2022-06-30,55.418589,-133.45424
+"94","2022_SFEI_A_1","SFEI_A_2022","edna","mixed","South Fish Egg Island",2022-07-11,55.48442,-133.17549
+"95","2022_SFEI_A_2","SFEI_A_2022","edna","mixed","South Fish Egg Island",2022-07-11,55.48442,-133.17549
+"96","2022_SFEI_A_3","SFEI_A_2022","edna","mixed","South Fish Egg Island",2022-07-11,55.48442,-133.17549
+"97","2022_SHIN_A_1","SHIN_A_2022","edna","eelgrass","Shinaku Inlet",2022-07-14,55.59929,-133.16
+"98","2022_SHIN_A_2","SHIN_A_2022","edna","eelgrass","Shinaku Inlet",2022-07-14,55.59929,-133.16
+"99","2022_SHIN_A_3","SHIN_A_2022","edna","eelgrass","Shinaku Inlet",2022-07-14,55.59929,-133.16
+"100","2022_TRIS_A_1","TRIS_A_2022","edna","eelgrass","Triste pt",2022-06-29,55.418367,-133.49597
+"101","2022_TRIS_A_2","TRIS_A_2022","edna","eelgrass","Triste pt",2022-06-29,55.418367,-133.49597
+"102","2022_TRIS_A_3","TRIS_A_2022","edna","eelgrass","Triste pt",2022-06-29,55.418367,-133.49597
