@@ -441,6 +441,11 @@ seine <- filter(long, type == "seine") %>%
 anti_join(site.info2, comb, by = "bay_year")
 anti_join(comb, site.info2, by = "bay_year")
 
+
+## read out out wide data frame for use in the wc_uni_analysis script
+# write.csv(wide, "Data/combined_gears_wcomm-4-2-25.csv")
+# write.csv(site.info2, "Data/combined_metadata_4-2-25.csv")
+#write.csv(long, "Data/combined_gear_wcomm_long_4-2-25.csv")
 ```
 
 pull out species names
@@ -1023,6 +1028,18 @@ pcoalabs <- as.list(c(glue::glue("PCoA 1 ({pe[1]}%)"),
 
 barplot(pcoa.bray$eig, names = paste ('PCoA', 1:137), las = 3, ylab = 'eigenvalues')
 
+pcoa.dat <- pcoa.bray$points %>%
+  as_tibble(rownames = "bay_year") %>%
+  left_join(site.info2) %>%
+  dplyr::select(c(bay_year, pcoa1, pcoa2, habitat, type))%>%
+  dplyr::rename(pcoa1end = pcoa1, pcoa2end = pcoa2)
+
+cent  <- aggregate(cbind(pcoa1end , pcoa2end) ~ habitat + type, data = pcoa.dat, FUN = mean) %>%
+  dplyr::rename(pcoa1 = pcoa1end, pcoa2 = pcoa2end)
+
+pcoa.dat2 <- pcoa.dat %>%
+  left_join(cent, by = c("habitat", "type"))
+
 # create species vectors w/ envfit
 pcoa.sp <- envfit(as.data.frame(pcoa.bray$points),
                   std.wide[,1:70], perm = 999)
@@ -1043,11 +1060,17 @@ pcoa <- pcoa.bray$points %>%
   #              fill = "lightgray", alpha = 0.6,
   #              data = {pcoa.bray$points %>% as_tibble(rownames = "bay_year") %>%
   # left_join(site.info) %>% filter(., type == "edna")}) +
-  # geom_point(size = 3) + 
-  stat_ellipse(aes(x = pcoa1, y = pcoa2, linetype = type, color = habitat),
-               linewidth = 2) +
-  geom_segment(data = pcoa.sp.dat.sig, aes(x = 0, xend = pcoa1, y = 0, yend = pcoa2),
-               inherit.aes=FALSE, linewidth = 1) +  # add arrows
+  geom_point(size = 2) +
+  geom_point(data = cent, mapping = aes(pcoa1, pcoa2, 
+                                        color = habitat, shape = type), 
+             size = 5) +
+  geom_segment(data = pcoa.dat2, mapping = aes(x = pcoa1, xend = pcoa1end,
+                                               y = pcoa2, yend = pcoa2end,
+                                               color = habitat, linetype = type)) + 
+  # stat_ellipse(aes(x = pcoa1, y = pcoa2, linetype = type, color = habitat),
+  #              linewidth = 2) + 
+  # geom_segment(data = pcoa.sp.dat.sig, aes(x = 0, xend = pcoa1, y = 0, yend = pcoa2),
+  #              inherit.aes=FALSE, linewidth = 1) +  # add arrows
   geom_label_repel(data = pcoa.sp.dat.sig,
                    aes(x = pcoa1, y = pcoa2, label = sp_code),
                    size = 5, inherit.aes = FALSE) +
@@ -2209,9 +2232,113 @@ for(i in 1:length(habs$habitat)){
 
 
 
+# species by nets and edna
+
+Can we look at the occurence of each species by each habitat (perhaps facet-wrapped by habitat) for each gear type. 
+So if a species is only found in seine than its equal to -1 
+if its only found in eDNA than equal to 1
+```{r}
+head(binary.wide)
+
+absolute.gear.comp <- binary.wide %>%
+  rownames_to_column(var = "bay_year") %>%
+  left_join(site.info2) %>%
+  pivot_longer(cols = c(`Agonopsis vulsa`:`Enophrys lucasi`), names_to = "species", values_to = "binary") %>%
+  group_by(species, habitat, type) %>%
+  dplyr::summarize(sums = sum(binary)) %>%
+  mutate(sums = ifelse(sums > 0, 1, 0)) %>%
+  pivot_wider(names_from = "type", values_from = "sums") %>%
+  group_by(species, habitat) %>%
+  mutate(metric = ifelse(edna + seine == 0, NA,
+                         ifelse(edna == seine, "0",
+                                ifelse(edna > seine, "1", 
+                                       ifelse(seine > edna, "-1")))))
+
+absolute.gear.comp %>%
+  na.omit() %>%
+  ggplot() +
+  geom_point(aes(x = metric, y = reorder(species, metric))) +
+  facet_wrap(~habitat) +
+  theme_bw()
+```
+
+Can we average it by species? 
+
+```{r}
+avg_pres_gear <- binary.wide %>%
+  rownames_to_column(var = "bay_year") %>%
+  left_join(site.info2) %>% # add in habitat and gear type information
+  pivot_longer(cols = c(`Agonopsis vulsa`:`Enophrys lucasi`), names_to = "species", values_to = "binary") %>% # pivot the dataframe longer
+  group_by(bay_year,bay_year2, species, habitat, type) %>%
+  dplyr::summarize(sums = sum(binary)) %>% # binary by site and replicate
+  ungroup() %>%
+  group_by(bay_year2, species, habitat, type) %>% # remove site replciates from group
+  dplyr::summarize(site.sum = sum(sums)) %>% # summarize the p/a by site, aggregating the edna replicates
+  mutate(site.sum = ifelse(site.sum > 0, 1, 0)) %>% # make the site sum back to binary
+  pivot_wider(names_from = "type", values_from = "site.sum") %>%
+  mutate(metric = as.numeric(ifelse(edna + seine == 0, NA,
+                         ifelse(edna == seine, "0",
+                                ifelse(edna > seine, "1", 
+                                       ifelse(seine > edna, "-1")))))) %>%
+  ungroup() %>%
+  group_by(species, habitat) %>%
+  dplyr::summarize(avg = mean(metric, na.rm = T),
+                   sd = sd(metric, na.rm = T)) %>%
+  mutate(avg = ifelse(avg == "NaN", NA, avg),
+         sd = ifelse(avg == "NaN", NA, sd)) %>%
+  filter(!(is.na(avg) & is.na(sd)))
+  
+
+pa_detection <- avg_pres_gear %>%
+  mutate(habitat = ifelse(habitat == "eelgrass", "Eelgrass", 
+                          ifelse(habitat == "mixed", "Mixed eelgrass",
+                                 ifelse(habitat == "kelp", "Understory kelp", habitat)))) %>%
+  ggplot() +
+  geom_point(aes(x = avg, y = reorder(species, -avg))) +
+  geom_errorbar(aes(x = avg, xmin = avg - sd, xmax = avg + sd, y = reorder(species, -avg))) +
+  geom_vline(aes(xintercept = 0), linetype = "dashed") +
+  labs(y = "Species", x = "Average P/A detection") +
+  facet_wrap(~habitat) +
+  theme_bw() +
+  theme(axis.text.y = element_text(size = 18),
+        axis.text.x = element_text(size = 18),
+        axis.title.x = element_text(size = 20),
+        axis.title.y = element_text(size = 20),
+        strip.text = element_text(size = 20))
+
+# ggsave(plot = pa_detection, filename = "Images/Average_pa_detection.png",
+#        height = 14, width = 20)
+
+unique(avg_pres_gear$species)
+table(avg_pres_gear$habitat) # I think this is species by habitat
+```
 
 
+What about just indicator species
+```{r}
 
+detection_ind_sp <- avg_pres_gear %>%
+  mutate(habitat = ifelse(habitat == "eelgrass", "Eelgrass", 
+                          ifelse(habitat == "mixed", "Mixed eelgrass",
+                                 ifelse(habitat == "kelp", "Understory kelp", habitat)))) %>%
+  filter(species %in% c(indic.sign.bh$rn)) %>%
+  ggplot() +
+  geom_vline(aes(xintercept = 0), linetype = "dashed") +
+  geom_errorbar(aes(x = avg, xmin = avg - sd, xmax = avg + sd, y = reorder(species, -avg)), 
+                width = 0.2, linewidth = 1) +
+  geom_point(aes(x = avg, y = reorder(species, -avg), color = species), size = 3) +
+  labs(y = "Species", x = "Average P/A detection") +
+  facet_wrap(~habitat) +
+  theme_bw() +
+  theme(axis.text.y = element_text(size = 18),
+        axis.text.x = element_text(size = 18),
+        axis.title.x = element_text(size = 20),
+        axis.title.y = element_text(size = 20),
+        strip.text = element_text(size = 20),
+        legend.position = "none")  
+
+detection_ind_sp  
+```
 
 
 
