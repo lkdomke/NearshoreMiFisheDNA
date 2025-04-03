@@ -1,0 +1,84 @@
+---
+title: "wc_uni_analysis"
+output: html_document
+date: "2025-04-02"
+editor_options: 
+  chunk_output_type: console
+---
+
+# libraries
+```{r}
+library(tidyverse)
+library(lubridate)
+library(ggrepel)
+library(patchwork)
+```
+
+# custom fxn
+```{r theme settings, include=FALSE}
+# Creates custom base plot theme that can adjust every graph that you use plot_theme for!
+
+plot_theme <- function() {
+  theme_bw(base_size = 20, base_family = "Calibri") %+replace%
+    theme(panel.background  = element_blank(),
+            plot.background = element_rect(fill="white", colour=NA), 
+            legend.background = element_rect(fill="transparent", colour=NA),
+            legend.key = element_rect(fill="transparent", colour=NA),
+            panel.grid.major = element_blank(), 
+            panel.grid.minor = element_blank(),
+            strip.background = element_rect(colour = "NA", fill = "grey96"))
+}
+
+# to use ggsave and export plots include argument 'device=cario_pdf' e.g.: 
+# ggsave("name.pdf", device=cairo_pdf, width = 6, height = 6)
+
+plot_theme_small <- function() {
+  theme_bw(base_size = 18, base_family = "Calibri") %+replace%
+    theme(panel.background  = element_blank(),
+            plot.background = element_rect(fill="white", colour=NA), 
+            legend.background = element_rect(fill="transparent", colour=NA),
+            legend.key = element_rect(fill="transparent", colour=NA),
+            panel.grid.major = element_blank(), 
+            panel.grid.minor = element_blank(),
+            strip.background = element_rect(colour = "NA", fill = "grey96"))
+}
+
+
+plot_theme_bw <- function() {
+  theme_bw(base_size = 20, base_family = "Calibri") %+replace%
+    theme(panel.background  = element_blank(),
+            plot.background = element_rect(fill="white", colour=NA), 
+            legend.background = element_rect(fill="transparent", colour=NA),
+            legend.key = element_rect(fill="transparent", colour=NA),
+            # panel.grid.major = element_blank(), 
+            # panel.grid.minor = element_blank(),
+            strip.background = element_rect(colour = "NA", fill = "grey96"))
+}
+```
+
+
+# data
+```{r}
+wide <- read.csv("Data/combined_gears_wcomm-4-2-25.csv") # this is a combined dataset of eDNA simple means fromtehcnical read proportions for all taxa. Beach seine data is transformed from abundance cpue data to proportional data, 
+# * question do we want to do these calculations on proportional data? We must have to*
+# should we be using a binomial response, is it zero inflated?  
+long <- read.csv("Data/combined_gear_wcomm_long_4-2-25.csv")
+site.info2 <- read.csv("Data/combined_metadata_4-2-25.csv")
+# read in species table
+# life history characteristics
+lhs <- read.csv("Data/NearshoreLHSCharacteristics.csv") %>%
+  mutate(Scientific.name = str_trim(Scientific.name, side = "right"))
+
+```
+
+Join in lhs traits to csv table
+```{r}
+test <- long %>%
+  left_join(lhs, by = c("name" = "Scientific.name")) %>%
+  filter(is.na(Schooling.))
+
+unique(test$name)
+
+unique(lhs$Scientific.name)
+```
+
