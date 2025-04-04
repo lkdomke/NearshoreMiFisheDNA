@@ -67,18 +67,32 @@ site.info2 <- read.csv("Data/combined_metadata_4-2-25.csv")
 # read in species table
 # life history characteristics
 lhs <- read.csv("Data/NearshoreLHSCharacteristics.csv") %>%
-  mutate(Scientific.name = str_trim(Scientific.name, side = "right"))
+  mutate(Scientific.name = str_trim(Scientific.name, side = "right")) %>%
+  mutate(Scientific.name = ifelse(Scientific.name == "Apodicthys flavidus",
+                                  "Apodichthys flavidus", Scientific.name)) %>%
+  mutate(Pelagic.Demersal = str_trim(Pelagic.Demersal, side = "right"))
 
 ```
 
 Join in lhs traits to csv table
 ```{r}
-test <- long %>%
+long.lhs <- long %>%
   left_join(lhs, by = c("name" = "Scientific.name")) %>%
-  filter(is.na(Schooling.))
+  dplyr::rename("common" = Common.name,
+                "schooling" = Schooling.,
+                "water_hab" = Pelagic.Demersal,
+                "scale" = Scale.Type) %>%
+  dplyr::select(-c(X, Citation, Notes))
 
-unique(test$name)
+head(long.lhs)
+# what are the groups: 
+unique(long.lhs$schooling) # n = 3
+unique(long.lhs$scale) # n = 5
+unique(long.lhs$water_hab) # n = 3
 
-unique(lhs$Scientific.name)
+long.lhs %>%
+  group_by(scale, schooling, water_hab, type, habitat) %>%
+  dplyr::summarize(sum = sum(value)) %>%
+  arrange(-sum)# 13 groups for just the lhs characterisitcs, type makes it 26, plus hab make it 78 groups
 ```
 
