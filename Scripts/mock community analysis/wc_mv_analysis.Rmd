@@ -1060,17 +1060,17 @@ pcoa <- pcoa.bray$points %>%
   #              fill = "lightgray", alpha = 0.6,
   #              data = {pcoa.bray$points %>% as_tibble(rownames = "bay_year") %>%
   # left_join(site.info) %>% filter(., type == "edna")}) +
-  geom_point(size = 2) +
-  geom_point(data = cent, mapping = aes(pcoa1, pcoa2, 
-                                        color = habitat, shape = type), 
-             size = 5) +
-  geom_segment(data = pcoa.dat2, mapping = aes(x = pcoa1, xend = pcoa1end,
-                                               y = pcoa2, yend = pcoa2end,
-                                               color = habitat, linetype = type)) + 
-  # stat_ellipse(aes(x = pcoa1, y = pcoa2, linetype = type, color = habitat),
-  #              linewidth = 2) + 
-  # geom_segment(data = pcoa.sp.dat.sig, aes(x = 0, xend = pcoa1, y = 0, yend = pcoa2),
-  #              inherit.aes=FALSE, linewidth = 1) +  # add arrows
+  # geom_point(size = 2) +
+  # geom_point(data = cent, mapping = aes(pcoa1, pcoa2, 
+  #                                       color = habitat, shape = type), 
+  #            size = 5) +
+  # geom_segment(data = pcoa.dat2, mapping = aes(x = pcoa1, xend = pcoa1end,
+  #                                              y = pcoa2, yend = pcoa2end,
+  #                                              color = habitat, linetype = type)) + 
+  stat_ellipse(aes(x = pcoa1, y = pcoa2, linetype = type, color = habitat),
+               linewidth = 2) +
+  geom_segment(data = pcoa.sp.dat.sig, aes(x = 0, xend = pcoa1, y = 0, yend = pcoa2),
+               inherit.aes=FALSE, linewidth = 1) +  # add arrows
   geom_label_repel(data = pcoa.sp.dat.sig,
                    aes(x = pcoa1, y = pcoa2, label = sp_code),
                    size = 5, inherit.aes = FALSE) +
