@@ -147,6 +147,18 @@ seine <- read.csv("Data/seine_biomass_at_edna_sites.csv") %>%
                   fork_length, mass_g, abundance)) %>%
   mutate(type = "seine")
 
+# bring in life history characteristics that Jessica put together
+lhs <- read.csv("Data/NearshoreLHSCharacteristics.csv") %>% # clean up a couple sp names
+  mutate(Scientific.name = str_trim(Scientific.name, side = "right")) %>%
+  mutate(Scientific.name = ifelse(Scientific.name == "Apodicthys flavidus",
+                                  "Apodichthys flavidus", Scientific.name)) %>%
+  mutate(Pelagic.Demersal = str_trim(Pelagic.Demersal, side = "right")) %>% # trim whitespace
+  dplyr::rename("name" = Scientific.name, # rename columns to be easier to code
+                "common" = Common.name,
+                "schooling" = Schooling.,
+                "water_hab" = Pelagic.Demersal,
+                "scale" = Scale.Type)
+
 
 ```
 
@@ -193,7 +205,7 @@ site.info <- edna.info %>%
 ## Remove extra df
 ```{r}
 rm(list = ls()[!ls() %in% c("edna.red", "seine", "site.info", "plot_theme", "plot_theme_bw",
-                            "add_global_label", "plot_theme_small")])
+                            "add_global_label", "plot_theme_small", "lhs")])
 ```
 
 # whole community data
@@ -349,6 +361,7 @@ table(site$habitat, site$type)
 eelg.site <- filter(site.info2, habitat == "eelgrass")
 mixed.site <- filter(site.info2, habitat == "mixed")
 kelp.site <- filter(site.info2, habitat == "kelp")
+eelg.mixed.site <- filter(site.info2, habitat %in% c("eelgrass", "mixed"))
 
 edna.site <- filter(site.info2, type == "edna")
 seine.site <- filter(site.info2, type == "seine")
@@ -362,6 +375,18 @@ long <- wide %>%
   pivot_longer(cols = c("Agonopsis vulsa":"Enophrys lucasi")) %>%
   left_join(site.info2, by = "bay_year")
 
+# Create a dataframe that has the abundance by species traits not species names
+traits <- long %>%
+  left_join(lhs, by = "name") %>%
+  unite(col = "traits", schooling:scale, remove = T, sep = "_") %>%
+  pivot_wider(id_cols = c(bay_year, bay_year2, intx, habitat, type, place_name, date, julian,
+                          latitude, longitude, year), 
+              names_from = "traits", values_from = "value", values_fn = sum, values_fill = 0) %>%
+  column_to_rownames(var = "bay_year") %>%
+  dplyr::select(-c(bay_year2:year))
+
+#colSums(traits[,c(-c(1:11))])
+
 #### subset into non zero species for each habitat
 # EELGRASS
 eelg.all <- filter(long, habitat == "eelgrass") %>%
@@ -369,7 +394,7 @@ eelg.all <- filter(long, habitat == "eelgrass") %>%
   
 nonz.eelg <- as.data.frame(x = colSums(eelg.all[,-c(1:11)]) == 0) %>%
     dplyr::rename(TF= "colSums(eelg.all[, -c(1:11)]) == 0") %>%
-    filter(TF == "FALSE") %>%
+    filter(TF == "FALSE") %>% # 58 sp
     rownames_to_column(var = "sp")
 
 eelg <- filter(long, habitat == "eelgrass") %>%
@@ -377,13 +402,14 @@ eelg <- filter(long, habitat == "eelgrass") %>%
   pivot_wider(names_from = "name", values_from = "value") %>%
   column_to_rownames(var = "bay_year") %>%
   dplyr::select(-c(bay_year2:year))
+
 # MIXED EELGRASS
 mixed.all <- filter(long, habitat == "mixed") %>%
   pivot_wider(names_from = "name", values_from = "value")
   
 nonz.mixed <- as.data.frame(x = colSums(mixed.all[,-c(1:11)]) == 0) %>%
     dplyr::rename(TF= "colSums(mixed.all[, -c(1:11)]) == 0") %>%
-    filter(TF == "FALSE") %>%
+    filter(TF == "FALSE") %>% # 55 sp
     rownames_to_column(var = "sp")
 
 mixed <- filter(long, habitat == "mixed") %>%
@@ -405,6 +431,22 @@ kelp <- filter(long, habitat == "kelp") %>%
   pivot_wider(names_from = "name", values_from = "value") %>%
   column_to_rownames(var = "bay_year") %>%
   dplyr::select(-c(bay_year2:year))
+
+# COMBINED EELGRASS & MIXED 
+eel.mixed.all <- filter(long, habitat %in% c("eelgrass", "mixed")) %>%
+  pivot_wider(names_from = "name", values_from = "value")
+  
+nonz.eelg.mixed <- as.data.frame(x = colSums(eel.mixed.all[,-c(1:11)]) == 0) %>%
+    dplyr::rename(TF= "colSums(eel.mixed.all[, -c(1:11)]) == 0") %>%
+    filter(TF == "FALSE") %>%
+    rownames_to_column(var = "sp") # 68 sp
+
+eelg.mixed <- filter(long, habitat %in% c("eelgrass", "mixed")) %>%
+  subset(name %in% unique(nonz.eelg.mixed$sp)) %>%
+  pivot_wider(names_from = "name", values_from = "value") %>%
+  column_to_rownames(var = "bay_year") %>%
+  dplyr::select(-c(bay_year2:year))
+
 
 #### subset into non zero for each gear type
 # eDNA
@@ -468,6 +510,11 @@ kelp.sp <- kelp %>%
   pivot_longer(cols = -c("bay_year"), names_to = "name", values_to = "value") %>%
   distinct(name)
 
+eel.mixed.sp <- eelg.mixed %>%
+  rownames_to_column(var = "bay_year") %>%
+  pivot_longer(cols = -c("bay_year"), names_to = "name", values_to = "value") %>%
+  distinct(name)
+
 #write.csv(sp, "Data/species_name_comb.csv")
 ```
 
@@ -479,6 +526,9 @@ std.wide <- wisconsin(wide)
 std.eelg <- wisconsin(eelg)
 std.mixed <- wisconsin(mixed)
 std.kelp <- wisconsin(kelp)
+
+std.eelg.mixed <- wisconsin(eelg.mixed)
+std.traits <- wisconsin(traits)
 
 std.edna <- wisconsin(edna)
 std.seine <- wisconsin(seine)
@@ -492,6 +542,9 @@ bray.wide <- vegdist(std.wide, method = "bray")
 bray.eelg <- vegdist(std.eelg, method = "bray")
 bray.mixed <- vegdist(std.mixed, method = "bray")
 bray.kelp <- vegdist(std.kelp, method = "bray")
+
+bray.eelg.mixed <- vegdist(std.eelg.mixed, method = "bray")
+bray.trait <- vegdist(std.traits, method = "bray")
 
 bray.edna <- vegdist(std.edna, method = "bray")
 bray.seine <- vegdist(std.seine, method = "bray")
@@ -547,6 +600,13 @@ disp.year.bin <- betadisper(jacc.wide, site.info2$year)
 anova(disp.year.bin)
 #H0 accepted; no within group dispersion 
 
+##### TRAIT BASED STD ABUNDANCE ######
+disp.trait.type <- betadisper(bray.trait, site.info2$type)
+anova(disp.trait.type) # no within group dispersion
+
+disp.trait.hab <- betadisper(bray.trait, site.info2$habitat)
+anova(disp.trait.hab) #  no within group dispersion
+
 ##### HABITAT SPECIFIC BETADISPER TESTINGS #######
 eelg.disp.type <- betadisper(bray.eelg, eelg.site$type)
 anova(eelg.disp.type) # h0 accepted pvalue = 0.225
@@ -556,6 +616,9 @@ anova(mixed.disp.type) # huge within group dispersion for mixed pvalue = 0.00002
 
 kelp.disp.type <- betadisper(bray.kelp, kelp.site$type)
 anova(kelp.disp.type) # h0 accepted pvalue = 0.58
+
+eelg.mixed.disp.type <- betadisper(bray.eelg.mixed, eelg.mixed.site$type)
+anova(eelg.mixed.disp.type) # UGH STILL within group dispersion pvalue = 0.00323
 
 ##### GEAR SPECIFIC BETADISPER TESTING ##########
 edna.disp.hab <- betadisper(bray.edna, edna.site$habitat)
@@ -592,6 +655,18 @@ setBlocks <- with(site.info2, bay_year2)
 adonis2(bray.wide ~ habitat * type, by = "margin", 
         permutation = perm, data = site.info2)
 # there is a significant interaction of habitat by type (pvalue = 0.005)
+
+###################################
+##### TRAIT SPECIFIC PERMA ########
+###################################
+adonis2(bray.trait ~ habitat * type, data = site.info2,
+        by = "margin", perm = 999) # significant intx by habt*type (pvalue = 0.016)
+
+# blocks
+perm <- how(nperm = 999)
+setBlocks <- with(site.info2, bay_year2)
+adonis2(bray.trait ~ habitat * type, by = "margin", 
+        permutation = perm, data = site.info2) # still sign intx by hab*type (pvalue = 0.021)
 
 ###################################
 ##### HABITAT SPECIFIC PERMA ######
@@ -667,6 +742,24 @@ p.val # p.val for the three informative pairwise values
 # seine eelgrass versus kelp - NOT significantly diff
 # seine eelgrass versus mixed - NOT significantly diff
 # seine mixed versus kelp - NOT significantly diff
+
+###### TRAIT BASED ########
+(pairs <- combn(levels(site.info2$intx), 2))
+(pairs <- pairs[,c(1,2,4,7,9,11,14,10,15)]) # we only care about a subset of these possible pairs
+# Pairwise tests: 
+p.val <- rep(NA,9)  # Set up vector to hold pairwise p-values
+for(i in 1:9) {
+  pr <- pairs[,i]
+  sub <- is.element(site.info2$intx, pr)
+  d.pair <- vegdist(std.traits[sub,], method = "bray")
+  cat("\n\nComparing", pr, ":\n")
+  print(fit <-adonis2(d.pair ~ intx, data=site.info2[sub,], perm=1999, by = "margin"))
+  p.val[i] <- fit[1,5]  # Save p-values
+  names(p.val)[i] <- paste(pr[1], "-", pr[2], sep="")
+}
+
+p.val
+##  All significantly different, 
 ```
 
 #visualize
@@ -700,6 +793,9 @@ edna.nmds$stress # 27%
 
 seine.nmds <- metaMDS(bray.seine, k = 2, autotransform = FALSE, trymax = 999)
 seine.nmds$stress # 21 % 
+
+trait.nmds <- metaMDS(bray.trait, k = 2, autotransform = FALSE, trymax = 999)
+trait.nmds$stress # 24 %  gross
 ```
 
 ### 3 axes nmds
@@ -1407,6 +1503,147 @@ pcoa.seine.plot <- pcoa.seine$points %>%
 pcoa.seine.plot
 
 ```
+
+### traits pcoa
+```{r}
+pcoa.bray <- cmdscale(bray.trait, eig = T)
+colnames(pcoa.bray$points) <- c("pcoa1", "pcoa2")
+plot(pcoa.bray$points)
+
+percent_explained <- 100* pcoa.bray$eig/ sum(pcoa.bray$eig)
+pe <- format(round(percent_explained[1:2], digits = 1), nsmall = 1, trim = T)
+
+pcoalabs <- as.list(c(glue::glue("PCoA 1 ({pe[1]}%)"),
+          glue::glue("PcoA 2 ({pe[2]}%)")))
+
+barplot(pcoa.bray$eig, names = paste ('PCoA', 1:137), las = 3, ylab = 'eigenvalues')
+
+pcoa.dat <- pcoa.bray$points %>%
+  as_tibble(rownames = "bay_year") %>%
+  left_join(site.info2) %>%
+  dplyr::select(c(bay_year, pcoa1, pcoa2, habitat, type))%>%
+  dplyr::rename(pcoa1end = pcoa1, pcoa2end = pcoa2)
+
+cent  <- aggregate(cbind(pcoa1end , pcoa2end) ~ habitat * type, data = pcoa.dat, FUN = mean) %>%
+  dplyr::rename(pcoa1 = pcoa1end, pcoa2 = pcoa2end)
+
+pcoa.dat2 <- pcoa.dat %>%
+  left_join(cent, by = c("habitat", "type"))
+
+# create species vectors w/ envfit
+pcoa.sp <- envfit(as.data.frame(pcoa.bray$points),
+                  std.traits[,1:13], perm = 999)
+pcoa.sp.dat <- data.frame(scores(pcoa.sp, display = "vectors"))
+pcoa.sp.dat$pvals <- pcoa.sp$vectors$pvals
+pcoa.sp.dat$sp_code <- row.names(pcoa.sp.dat)
+pcoa.sp.dat$r2 <- pcoa.sp$vectors$r2
+pcoa.sp.dat.sig <- filter(pcoa.sp.dat, pvals < 0.01)
+
+
+pcoa <- pcoa.bray$points %>%
+  as_tibble(rownames = "bay_year") %>%
+  left_join(site.info2) %>%
+  # filter(type == "seine",
+  #        habitat == "mixed") %>%
+  ggplot(aes(x = pcoa1, y = pcoa2, fill = type, shape = habitat), 
+         color = "black", linewidth = 1.5) +
+  # geom_hline(aes(yintercept = 0), linetype = "dashed", linewidth = 0.5) +
+  # geom_vline(aes(xintercept = 0), linetype = "dashed", linewidth = 0.5) +
+  # geom_polygon(aes(x = pcoa1, y = pcoa2, group = bay_year2),
+  #              fill = "lightgray", alpha = 0.2,
+  #              data = {pcoa.bray$points %>% as_tibble(rownames = "bay_year") %>%
+  # left_join(site.info) %>% filter(., type == "edna")}) +
+    geom_segment(data = pcoa.sp.dat.sig, aes(x = 0, xend = pcoa1, y = 0, yend = pcoa2),
+               inherit.aes=FALSE, linewidth = 1) +  # add arrows
+  geom_point(size = 4) +
+  geom_point(data = cent, mapping = aes(pcoa1, pcoa2,
+                                        fill = type, shape = habitat),
+             size = 8, color = "black") +
+  # geom_segment(data = pcoa.dat2, mapping = aes(x = pcoa1, xend = pcoa1end,
+  #                                              y = pcoa2, yend = pcoa2end,
+  # #                                              color = habitat, linetype = type)) +
+  # stat_ellipse(aes(x = pcoa1, y = pcoa2, linetype = habitat, color = type),
+  #              linewidth = 2, level = .95, type = "t") +
+  geom_label_repel(data = pcoa.sp.dat.sig,
+                   aes(x = pcoa1, y = pcoa2, label = sp_code),
+                   size = 5, inherit.aes = FALSE,
+                   nudge_x = ifelse(pcoa.sp.dat.sig$pcoa1 >= 0.2, 0.2, -0.2),
+                   nudge_y = ifelse(pcoa.sp.dat.sig$pcoa2 >= -0.1, 0.15, -0.15),
+                   max.overlaps = getOption("ggrepel.max.overlaps", default = 17)) +
+  scale_fill_manual(name = "Gear Type", 
+                     labels = c("eDNA", "Beach seine"),
+                     values = c("#645FAB", "#BE6E46")) +
+  # scale_linetype_manual(name = "Gear Type", 
+  #                       labels = c("eDNA", "Beach seine"), 
+  #                       values = c("solid", "dashed")) +
+  scale_shape_manual(name = "Habitat", 
+                     labels = c("Eelgrass", "Understory kelp", "Mixed eelgrass"),
+                     values = c(21, 22, 23)) +
+  #theme(legend.position = "none") +
+  labs(x = pcoalabs[[1]], y = pcoalabs[[2]]) +
+    plot_theme() +
+    theme(legend.key.width = unit(2, "cm"))
+
+pcoa
+# ggsave(filename = "Images/wc_pcoa_edna-seine_bray.png", plot = pcoa,
+#       height = 8, width = 14)
+```
+
+```{r}
+library(flextable)
+long %>%
+  left_join(lhs, by = "name") %>%
+  unite(col = "traits", schooling:scale, remove = T, sep = "_") %>%
+  distinct(traits, name) %>%
+  as_flextable(spread_first_col = T)
+
+```
+
+#### traits by gear type bar graph
+```{r}
+avg.trait.gear <- long %>%
+  left_join(lhs, by = "name") %>%
+  unite(col = "traits", schooling:scale, remove = T, sep = "_") %>%
+  # pivot_wider(id_cols = c(bay_year, bay_year2, intx, habitat, type, place_name, date, julian,
+  #                         latitude, longitude, year), 
+  #             names_from = "traits", values_from = "value", values_fn = sum, values_fill = 0) %>%
+  group_by(traits, habitat, type) %>%
+  dplyr::summarize(average = mean(value),
+                   sd = sd(value)) %>%
+  filter(traits %in% pcoa.sp.dat.sig$sp_code) %>%
+  ggplot() +
+  geom_col(aes(x = traits, y = average, fill = type), position = position_dodge(1),
+           color = "black") +
+  geom_errorbar(aes(x = traits, ymin = average - sd, ymax = average + sd, group = type), position = position_dodge(1), width = 0.2) +
+  scale_fill_manual(name = "Gear Type", 
+                     labels = c("eDNA", "Beach seine"),
+                     values = c("#645FAB", "#BE6E46")) +
+  plot_theme() +
+  labs(x = "Traits", y = "Average relative abundance +/- SD") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 22),
+        axis.title.x = element_text(size = 22),
+        axis.title.y = element_text(size = 22),
+        axis.text.y = element_text(size = 22),
+        strip.text = element_text(size = 22),
+        legend.text = element_text(size = 22))+
+  facet_wrap(~habitat, ncol = 1)
+
+ggsave(plot = avg.trait.gear, filename = "Images/Avg_relAbund_traits_gear.jpg",
+       height = 16, width = 12)
+
+long %>%
+  left_join(lhs, by = "name") %>%
+  unite(col = "traits", schooling:scale, remove = T, sep = "_") %>%
+  ggplot() +
+  geom_col(aes(x = bay_year, y = value, fill = traits)) +
+  facet_row(~type, scales = "free_x") +
+  # facet_col(~habitat, scales = "free_x") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+table(rowSums(traits))
+  
+```
+
 
 # species accumulation curves
 ```{r}
