@@ -70,29 +70,142 @@ lhs <- read.csv("Data/NearshoreLHSCharacteristics.csv") %>%
   mutate(Scientific.name = str_trim(Scientific.name, side = "right")) %>%
   mutate(Scientific.name = ifelse(Scientific.name == "Apodicthys flavidus",
                                   "Apodichthys flavidus", Scientific.name)) %>%
-  mutate(Pelagic.Demersal = str_trim(Pelagic.Demersal, side = "right"))
+  mutate(Pelagic.Demersal = str_trim(Pelagic.Demersal, side = "right")) %>%
+  dplyr::rename("name" = Scientific.name,
+                "common" = Common.name,
+                "schooling" = Schooling.,
+                "water_hab" = Pelagic.Demersal,
+                "scale" = Scale.Type)
 
 ```
 
 Join in lhs traits to csv table
 ```{r}
 long.lhs <- long %>%
-  left_join(lhs, by = c("name" = "Scientific.name")) %>%
-  dplyr::rename("common" = Common.name,
-                "schooling" = Schooling.,
-                "water_hab" = Pelagic.Demersal,
-                "scale" = Scale.Type) %>%
-  dplyr::select(-c(X, Citation, Notes))
+  left_join(lhs, by = "name") %>%
+  dplyr::select(-c(X, Citation, Notes)) %>%
+  unite(col = "traits", schooling:scale, remove = T, sep = "_") %>%
+  group_by(bay_year, bay_year2, intx, habitat, type, date, julian,
+           longitude, latitude, year, traits) %>%
+  dplyr::summarize(value.sum = sum(value))
+
+unique(long.lhs$traits)
 
 head(long.lhs)
-# what are the groups: 
-unique(long.lhs$schooling) # n = 3
-unique(long.lhs$scale) # n = 5
-unique(long.lhs$water_hab) # n = 3
 
-long.lhs %>%
+##
+long %>%
+  left_join(lhs, by = "name") %>%
+  dplyr::select(-c(X, Citation, Notes)) %>%
   group_by(scale, schooling, water_hab, type, habitat) %>%
   dplyr::summarize(sum = sum(value)) %>%
   arrange(-sum)# 13 groups for just the lhs characterisitcs, type makes it 26, plus hab make it 78 groups
+```
+
+```{r}
+library(corrgram)
+
+corrgram(long.lhs)
+hist(long.lhs$value.sum)
+hist(log(long.lhs$value.sum +0.1))
+hist(sqrt(long.lhs$value.sum))
+
+hist(filter(long.lhs, value.sum>0)$value.sum)
+
+summary(long.lhs)
+
+
+boxplot(value.sum ~ habitat, data = long.lhs)
+boxplot(value.sum ~ type, data = long.lhs)
+boxplot(value.sum ~ traits, data = long.lhs)
+boxplot(value.sum ~ type + traits, data = long.lhs)
+```
+
+try out an lm and see how the residuals look
+We know this is incorrect but its a starting point
+```{r}
+lm <- lm(value.sum ~ habitat * type * traits, data = long.lhs)
+summary(lm)
+par(mfrow = c(2,2))
+plot(lm) # qq is particularly bad
+par(mfrow=c(1,1))
+```
+
+We know we need to use a beta or binomial distribution and have some kind of re for the repeat sampling with eDNA
+
+```{r}
+library(mgcv)
+# clean up the group combination (habitat * trait * type)
+long.lhs %>%
+  filter(habitat == "eelgrass") %>%
+  group_by(traits, type) %>%
+  dplyr::summarize(sum = sum(value.sum)) %>%
+  filter(sum == 0)
+
+long.lhs.red <- long.lhs %>%
+  filter(!(traits == "obligatory schooling_both_no scales" & type == "edna"),
+         !(traits == "obligatory schooling_both_no scales" & type == "seine" & habitat == "eelgrass"),
+         !(traits == "obligatory schooling_both_no scales" & type == "seine" & habitat == "kelp"),
+         !(traits == "solitary_pelagic_scales" & type == "seine"),
+         !(traits == "solitary_pelagic_scales" & type == "edna" & habitat == "kelp"),
+         !(traits == "solitary_pelagic_scales" & type == "edna" & habitat == "mixed")) %>%
+  mutate(traits = as.factor(traits),
+         habitat = as.factor(habitat),
+         type = as.factor(type),
+         bay_year2 = as.factor(bay_year2))
+```
+
+By habitat
+```{r}
+eelg.lhs <- filter(long.lhs.red, habitat == "eelgrass")
+gam.eelg <- gam(value.sum ~ traits*type + s(bay_year2, bs = 're'), 
+             family = betar, data = eelg.lhs)
+
+eg.sums <- summary(gam.eelg)
+eg.sums
+plot(gam.eelg)
+
+emmeans(gam.eelg, ~ traits | type)
+
+visreg(gam.eelg, "type", by = "traits", gg = TRUE, type = "contrast") +
+  facet_wrap(~traits, nrow = 2) +
+  theme_bw() +
+  labs(subtitle = "Eelgrass meadows", x = "Gear type") +
+  theme(strip.text = element_text(size = 10),
+        axis.text.x = element_text(size = 12),
+        axis.title.x = element_text(size = 14))
+# contrast versus conditional plots:
+#' conditional returns the value of the x variable and the change in response on the y axis while other variables are constant (meidan for numeric and most common category for factors)
+#' contrast: is the effect on the expected value of the response (relative abundance) by moving the x variable away from a reference point on the x axis (numeric == mean)
+ # so in this case this illustrates the effect on relative abundance of a change in gear type by traits category
+
+mixed.lhs <- filter(long.lhs.red, habitat == "mixed")
+gam.mixed <- gam(value.sum ~ type*traits + s(bay_year2, bs = 're'), 
+             family = betar, data = mixed.lhs)
+
+summary(gam.mixed)
+plot(gam.mixed)
+visreg(gam.mixed, "type", by = "traits", gg = TRUE, type = "contrast") +
+  facet_wrap(~traits, nrow = 2) +
+  theme_bw() +
+  labs(subtitle = "Mixed eelgrass meadows", x = "Gear type") +
+  theme(strip.text = element_text(size = 10),
+        axis.text.x = element_text(size = 12),
+        axis.title.x = element_text(size = 14))
+
+#####   kelp 
+kelp.lhs <- filter(long.lhs.red, habitat == "kelp")
+gam.kelp <- gam(value.sum ~ type*traits + s(bay_year2, bs = 're'), 
+             family = betar, data = kelp.lhs)
+
+summary(gam.kelp)
+plot(gam.kelp)
+visreg(gam.kelp, "type", by = "traits", gg = TRUE, type = "contrast") +
+  facet_wrap(~traits, nrow = 2) +
+  theme_bw() +
+  labs(subtitle = "Understory kelp beds", x = "Gear type") +
+  theme(strip.text = element_text(size = 10),
+        axis.text.x = element_text(size = 12),
+        axis.title.x = element_text(size = 14))
 ```
 
