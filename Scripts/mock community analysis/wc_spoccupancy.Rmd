@@ -1,0 +1,546 @@
+---
+title: "wc_spoccupancy"
+output: html_document
+date: "2025-05-09"
+editor_options: 
+  chunk_output_type: console
+---
+
+libraries
+```{r}
+#install.packages("spOccupancy")
+library(spOccupancy)
+library(dplyr)
+library(lubridate)
+library(rnaturalearth)
+# if rnaturalearth can't be loaded, try:
+#install.packages("rnaturalearthhires", repos = "https://ropensci.r-universe.dev", type = "source")
+```
+
+# 1) format data for input to spOccupancy
+
+# Read in data
+Cleaned in a different script (sourced here)
+```{r}
+#source("Scripts/mock community analysis/spOccupancy_data_cleaning.R")
+long <- read.csv("Data/spOccupancy_fishdat_long_5-14-25.csv")
+sites <- read.csv("Data/spOccupancy_fishdat_sites_5-14-25.csv")
+```
+
+# 1.1 Dectection-nondetection array
+
+```{r}
+long %>%
+  distinct(bay_year2, intx, habitat, type, julian, latitude, longitude, year)
+# okay this data set looks correct and has all the right data associated
+head(long)
+edna <- filter(long, type == "edna") %>%
+  separate(bay_year, into = c("years", "bay", "sample_id", "replicate")) %>%
+  dplyr::select(-c(bay, sample_id, years)) %>%
+  filter(value != 0)
+
+seine <- filter(long, type == "seine") %>%
+  mutate(replicate = 1) %>%
+  dplyr::select(-c(bay_year)) %>%
+  filter(value != 0)
+
+# extract codes for each species 
+sp.names.edna <- sort(unique(edna$name)) # did not see the same species per gear
+sp.names.seine <- sort(unique(seine$name)) # 66 with edna and 49 with seine
+
+# extract site codes
+site.codes.edna <- sort(unique(edna$bay_year2)) # 37 sites with edna (wo repeating)
+site.codes.seine <- sort(unique(seine$bay_year2)) # 35 sites with seine
+
+# length of species
+N1 <- length(sp.names.edna) # i know these are the same
+N2 <- length(sp.names.seine)
+
+# maximum number of replicates at a site
+K1 <- 3 # up to 3 for edna
+K2 <- 1 # only 1 for seine
+
+# number of sites
+J1 <- length(unique(edna$bay_year2))
+J2 <- length(unique(seine$bay_year2))
+
+# create array for detection non detection data
+y.edna <- array(NA, dim = c(N1, J1, K1))
+y.seine <- array(NA, dim = c(N2, J2, K2))
+
+# label the dimensions of y 
+dimnames(y.edna)[[1]] <- sp.names.edna
+dimnames(y.edna)[[2]] <- site.codes.edna
+
+dimnames(y.seine)[[1]] <- sp.names.seine
+dimnames(y.seine)[[2]] <- site.codes.seine
+
+# look at the structure
+str(y.edna) # this structure tells us our detection-non detection array will have data for 70 species at 39 sites across a possible 3 replicates at each site. 
+str(y.seine) # the main difference here is fewer sites (1:35) and only one replicate (1)
+
+### QUESTION: what is the best way to incorporate the gear type? 
+# Should it perhaps be up to 5 replicates at each site?
+# Or two different datasets? 
+# Based on reading the "integrated multispecies occupancy vignette" lets try with separate datasets
+```
+
+For loop to pull in data to fill the NAs in 
+
+For eDNA
+```{r}
+for (j in 1:J1) { # Loop through sites.
+  for (k in 1:K1) { # Loop through replicates at each site.
+    # Extract data for current site/replicate combination.
+    curr.df <- edna %>%
+      filter(bay_year2 == site.codes.edna[j], replicate == k)
+ 
+    # If plot j was sampled during replicate k, 
+    # curr.df will have at least 1 row (i.e., at least 
+    # one species will be observed). If not, assume it 
+    # was not sampled for that replicate.
+    if (nrow(curr.df) > 0) {
+      # Extract the species that were observed during
+      # this site/replicate.
+      curr.sp <- which(sp.names.edna %in% curr.df$name)
+      # Set value to 1 for species that were observed.
+      y.edna[curr.sp, j, k] <- 1
+      # Set value to 0 for all other species.
+      y.edna[-curr.sp, j, k] <- 0
+    }
+  } # k (replicates)
+} # j (sites)
+
+str(y.edna)
+apply(y.edna, 1, sum, na.rm = TRUE)
+```
+
+
+For seine
+```{r}
+for (j in 1:J2) { # Loop through sites.
+  for (k in 1:K2) { # Loop through replicates at each site.
+    # Extract data for current site/replicate combination.
+    curr.df <- seine %>%
+      filter(bay_year2 == site.codes.seine[j], replicate == k)
+ 
+    # If plot j was sampled during replicate k, 
+    # curr.df will have at least 1 row (i.e., at least 
+    # one species will be observed). If not, assume it 
+    # was not sampled for that replicate.
+    if (nrow(curr.df) > 0) {
+      # Extract the species that were observed during
+      # this site/replicate.
+      curr.sp <- which(sp.names.seine %in% curr.df$name)
+      # Set value to 1 for species that were observed.
+      y.seine[curr.sp, j, k] <- 1
+      # Set value to 0 for all other species.
+      y.seine[-curr.sp, j, k] <- 0
+    }
+  } # k (replicates)
+} # j (sites)
+
+str(y.seine)
+apply(y.seine, 1, sum, na.rm = TRUE)
+```
+
+## Check loop set up
+```{r}
+head(edna)
+
+edna.test <- edna %>%
+  mutate(pa = ifelse(value == 0, 0, 1)) %>%
+  pivot_wider(names_from = name, values_from = pa, values_fill = 0)
+
+sums <- data.frame(colSums(edna.test[,-c(1:10)])) %>%
+  rownames_to_column(var = "names") %>%
+  dplyr::rename(sums = "colSums.edna.test....c.1.10...")
+
+test <- apply(y.edna, 1, sum, na.rm = TRUE) %>%
+  data.frame() %>%
+  rownames_to_column(var = "names") %>%
+  dplyr::rename(sums.forloop = ".") %>%
+  left_join(sums)
+
+table(test$sums.forloop == test$sums) # good
+
+## test for seines jic
+seine.test <- seine %>%
+  mutate(pa = ifelse(value == 0, 0, 1)) %>%
+  pivot_wider(names_from = name, values_from = pa, values_fill = 0)
+
+sums.seine <- data.frame(colSums(seine.test[,-c(1:10)])) %>%
+  rownames_to_column(var = "names") %>%
+  dplyr::rename(sums = "colSums.seine.test....c.1.10...")
+
+test2 <- apply(y.seine, 1, sum, na.rm = TRUE) %>%
+  data.frame() %>%
+  rownames_to_column(var = "names") %>%
+  dplyr::rename(sums.forloop = ".") %>%
+  left_join(sums.seine)
+
+table(test2$sums.forloop == test2$sums) # good
+```
+
+
+Okay now we've set up our two data arrays for edna (y.edna) and seine (y.seine)
+There are different number of sites and species for each of these (see J1, J2 and sp.names)
+
+Next step are setting up the detection covariates
+# 1.2 Detection covariates
+These covariates first are observation level covariates that account for variation in *detection probability* across different sites and the different surveys at each site. 
+
+Formulas: 
+det ~ scale + school + hab
+
+ocr ~ habitat + region + doy? 
+
+For detection - lets try creating a similar array as above, but instead of presence/absence we indicate scale type (school and water hab types etc) and build three layers for each trait
+
+```{r}
+lhs <- read.csv("Data/NearshoreLHSCharacteristics.csv") %>%
+  mutate(Scientific.name = str_trim(Scientific.name, side = "right")) %>%
+  mutate(Scientific.name = ifelse(Scientific.name == "Apodicthys flavidus",
+                                  "Apodichthys flavidus", Scientific.name)) %>%
+  mutate(Pelagic.Demersal = str_trim(Pelagic.Demersal, side = "right")) %>%
+  dplyr::rename("name" = Scientific.name,
+                "common" = Common.name,
+                "schooling" = Schooling.,
+                "water_hab" = Pelagic.Demersal,
+                "scale" = Scale.Type) %>%
+  dplyr::select(c(name, schooling, water_hab, scale)) %>%
+  mutate(schooling = str_replace(schooling," ", "_"),
+         scale = str_replace(scale, " ", "_"))
+
+# L <- 3 # this is number of unique traits we're looking at
+# 
+# det.cov <- array(NA, dim = c(N1, J1, L))
+# dimnames(det.cov)[[1]] <- sp.names.edna
+# dimnames(det.cov)[[2]] <- site.codes.edna
+# 
+# str(det.cov)
+```
+
+** not completed **
+```{r}
+#edna.school <- matrix(NA, nrow = N1, ncol = J1)
+# n <- 1
+# l <- 2
+# 
+# for (n in 1:N1) { # Loop through species
+#   for (l in 2:L) { # Loop through a given lhs
+#     # Get current date and time for each survey 
+#     curr.vals <- lhs %>%
+#       filter(name == sp.names.edna[n]) 
+#     
+#     curr.vals[,l]
+#       
+#     # If the site was surveyed for the given replicate, 
+#     # extract the first date and time value. 
+#     
+#     det.cov[site.codes.edna, n, l] <- curr.vals[,l]
+#     
+#   } # k (replicates)
+# } # j (sites) 
+# # Check out the structure of our covariates. 
+# str(hb.day)
+```
+
+## Dummy detection covariates
+in order to test run the multi-species model lets create some dummy covariates
+Main candidate is doy which is an observation covariate
+
+**NOTE: this is more complicated than it needs to be but I want to follow the format in the vignette**
+```{r}
+head(edna)
+head(seine)
+
+edna %>%
+  group_by(bay_year2, replicate) %>%
+  dplyr::summarize(doy = unique(julian)) %>%
+  ungroup() %>%
+  glimpse()
+
+edna.doy <- matrix(NA, nrow = J1, ncol = K1)
+# j <- 1
+# k <- 1
+
+for (j in 1:J1) { # Loop through sites
+  for (k in 1:K1) { # Loop through replicate surveys
+    # Get current date and time for each survey 
+    curr.vals <- edna %>%
+      filter(bay_year2 == site.codes.edna[j], replicate == k) %>%
+      select(julian) %>%
+      arrange(julian)
+    # If the site was surveyed for the given replicate, 
+    # extract the first date and time value. 
+    if (nrow(curr.vals) > 0) {
+      edna.doy[j, k] <- curr.vals$julian[1]
+      
+    }
+  } # k (replicates)
+} # j (sites) 
+# Check out the structure of our covariates. 
+str(edna.doy)
+
+```
+
+repeat for seines
+```{r}
+seine %>%
+  group_by(bay_year2, replicate) %>%
+  dplyr::summarize(doy = unique(julian)) %>%
+  ungroup() %>%
+  glimpse()
+
+seine.doy <- matrix(NA, nrow = J2, ncol = K2)
+# j <- 1
+# k <- 1
+
+for (j in 1:J2) { # Loop through sites
+  for (k in 1:K2) { # Loop through replicate surveys
+    # Get current date and time for each survey 
+    curr.vals <- seine %>%
+      filter(bay_year2 == site.codes.seine[j], replicate == k) %>%
+      select(julian) %>%
+      arrange(julian)
+    # If the site was surveyed for the given replicate, 
+    # extract the first date and time value. 
+    if (nrow(curr.vals) > 0) {
+      seine.doy[j, k] <- curr.vals$julian[1]
+      
+    }
+  } # k (replicates)
+} # j (sites) 
+# Check out the structure of our covariates. 
+str(seine.doy)
+```
+
+```{r}
+det.covs.edna <- list(doy = edna.doy)
+det.covs.seine <- list(doy = seine.doy)
+```
+
+
+
+# 1.3 Occurence covariates
+"formatting covariates is straightforward because covariates *can only vary by site*. Thus they are formatted as a dataframe or matrix. Rows represent the sites and columns represent different covariates
+
+formula:
+occr ~ habitat + "region" + doy? 
+
+
+plot locations & assign a region 
+```{r}
+library(sf)
+head(sites)
+table(sites$habitat)
+
+# The polygons I have are nicer and have better detail, but using naturalearth is easier to share
+# ak <- st_read(dsn = "../General GIS goodies/alaska_63360/",
+#               layer = "ALASKA_63360_PY")
+
+# the polygons from naturalearth also plot way faster than the detailed shapefiles I have
+world <- ne_countries(scale = 10, returnclass = "sf")
+usa <- ne_states("United States of America", returnclass = "sf") # simple features
+ak.small <- subset(usa, name == "Alaska") %>% # Subset ak from the usa object for small AK inset
+  st_transform(., crs = st_crs(26908))
+
+sites.sf <- st_as_sf(sites, coords = c("longitude", "latitude"), crs = 4326) %>%
+  st_transform(., crs = st_crs(26908))
+
+# ak.crop <- ak %>%
+  # st_transform(., crs = st_crs(26908)) %>%
+  # st_crop(ak, xmin = 513765.8, xmax = 760892.3,
+  #         ymin = 6054378, ymax = 6247162)
+
+ak.crop <- ak.small %>%
+  st_transform(., crs = st_crs(26908)) %>%
+  st_crop(ak, xmin = 513765.8, xmax = 760892.3,
+          ymin = 6054378, ymax = 6247162)
+
+ggplot() +
+  geom_sf(ak.crop, mapping = aes(), fill = "#999999") +
+  geom_sf(sites.sf, mapping = aes(fill = habitat),
+          size = 5, alpha = 0.8, shape = 21) +
+  scale_fill_manual(values = c("#327610", "#E4572E", "#E1AD01"),
+                    labels = c("Eelgrass",
+                               "Understory kelp",
+                               "Mixed eelgrass"),
+                    name = "Sample locations")
+
+# whats the best way to dummy assign a region to these? Probably could do it by hand?
+# could do ktn area (n = 10), southern tip (n = 6), offshore mid (n = 5), near craig (n = 10), then north the cut (n = 6)
+
+site.region <- sites %>%
+  mutate(region = NA,
+         region = ifelse(longitude > -132, "Ktn", region),
+         region = ifelse(is.na(region) & latitude < 55, "South", region),
+         region = ifelse(is.na(region) & latitude > 55.42 & latitude < 55.6, "Craig", region),
+         region = ifelse(is.na(region) & latitude > 55.6, "North", region),
+         region = ifelse(is.na(region), "Mid", region))
+
+site.region.sf <- st_as_sf(site.region, coords = c("longitude", "latitude"), crs = 4326) %>%
+  st_transform(., crs = st_crs(26908))
+
+ggplot() +
+  geom_sf(ak.crop, mapping = aes(), fill = "#999999") +
+  geom_sf(site.region.sf, mapping = aes(fill = region),
+          size = 5, alpha = 0.8, shape = 21)
+```
+
+
+occr formula: 
+occr ~ habitat + region 
+
+rows are sites
+```{r}
+occ.covs <- site.region %>%
+  arrange(bay_year2) %>%
+  column_to_rownames(var = "bay_year2") %>%
+  dplyr::select(habitat, region)
+
+habitat <- occ.covs[,1]
+region <- occ.covs[,2]
+str(habitat)
+str(region)
+
+str(occ.covs)
+```
+
+
+# 2) Package data into a list
+Needs to be in a list format to go into spOccupancy data argument
+Should contain: detection-nondection (y), occurence covariates, detection covariates [optional if spatially explicit model: spatial coordinates]
+
+Dection-nondection array
+```{r}
+str(y.edna) # 37 sites by 66 species over three replicates
+str(y.seine) # 35 sites by 49 species over one replicate
+
+# combine to create a full list of two detection arrays
+y.full <- list(edna = y.edna,
+               seine = y.seine)
+
+str(y.full)
+```
+
+Dectection covariates
+list of either site-level covariates or observation level covariates
+site level: vector of length J (number of sites)
+observation level: matrix or dataframe rows = J (number of sites) and columns = K (maximum number of replicates)
+
+in progress - try out a dummy detection formula
+det ~ doy 
+```{r}
+str(det.covs.edna)
+str(det.covs.seine)
+
+det.covs <- list(edna = det.covs.edna,
+                 seine = det.covs.seine)
+
+str(det.covs)
+```
+
+
+Occurence covariates
+Either matrix or dataframe
+rows length of J (number of sites), column number = # of covariates
+```{r}
+str(occ.covs) # already a dataframe with two covariates, this is all 37 sites
+# which is where all the eDNA sites are, but we need a separate one for the seine
+occ.covs.edna <- occ.covs %>%
+  rownames_to_column(var = "bay_year2") %>%
+  mutate(sites.indx.edna = 1:nrow(.))
+
+occ.covs.seine <- occ.covs %>%
+  rownames_to_column(var = "bay_year2") %>%
+  mutate(sites.indx.seine = 1:nrow(.)) %>%
+  filter(!(bay_year2 %in% c("BTRB_A_2021", "NFEI_B_2021"))) #%>% # this remove index 5, 22
+#  column_to_rownames(var = "bay_year2")
+
+
+str(occ.covs.edna)
+str(occ.covs.seine)
+
+# so in the example they combine these using rbind ecause they do not over lap spatially, ours do overlap spatiall and its not clear if we need to use a full occurence covariates dataframe will all sites or seperate out the data source and occurenve covariate
+occ.covs.gear <- full_join(occ.covs.edna, occ.covs.seine, by = "bay_year2") %>%
+  dplyr::rename(habitat.edna = habitat.x, region.edna = region.x,
+                habitat.seine = habitat.y, region.seine = region.y)
+
+str(occ.covs.gear) # df with bayyear and diff columns for each gear covariate
+str(occ.covs) # df with bayyear in rownames with all habitat and region covariates
+
+```
+
+Create a site index
+sites should be a list with two elements (one for each data source) where each element consists of a vector that indicates the rows in occ.covs that correspond with the specific row of the detection-nondection data for that data source
+```{r}
+# data("hbef2015")
+# data("neon2015")
+# str(neon2015)
+# sites.index <- list(hbef = 1:nrow(hbef2015$occ.covs), 
+#                     neon = 1:nrow(neon2015$occ.covs) + nrow(hbef2015$occ.covs))
+
+# our equivalent
+sites.index <- list(edna = occ.covs.edna$sites.indx.edna,
+                    seine = occ.covs.seine$sites.indx.seine)
+```
+
+Create species index
+```{r}
+sp.indx <- list(edna = sp.names.edna,
+                seine = sp.names.seine)
+```
+
+
+Package together
+```{r}
+# package into a list
+# data.edna <- list(y = y.edna,
+#                   occ.covs = occ.covs
+#                   )
+# 
+# str(data.edna)
+# 
+# data.seine <- list(y = y.seine,
+#                    occ.covs = occ.covs)
+
+data.list <- list(y = y.full,
+                  occ.covs = occ.covs, # in example: length is no. of sites in both datasets
+                  det.covs = det.covs,
+                  sites = sites.index,
+                  species = sp.indx)
+# there's dummy detection covariates in here since I'm unsure how to incorporate traits right now. 
+
+str(data.list)
+```
+
+# 3) Fit integrated multi-species occupancy model
+```{r}
+# this takes awhile to run (~ 5 minutes) so don't run it unless you really want to
+out.1 <- intMsPGOcc(occ.formula = ~ as.factor(habitat) + as.factor(region),
+                    det.formula = list(edna = ~ doy,
+                                       seine = ~ doy), 
+                    data = data.list, 
+                    # criteria for MCMC samplers
+                    n.samples = 20000, # number of iterations
+                    n.omp.threads = 1, 
+                    verbose = TRUE,
+                    n.report = 4000,
+                    n.burn = 12000, # burn in period?
+                    n.thin = 8, # this is a thinning rate (results in 3000 posterior samples)
+                    n.chains = 3) # no. of chains
+
+summary(out.1)
+summary(out.1, level = "community")
+```
+
+Can calculate WAIC for the model to compare if we specify different formulas
+and also by species
+```{r}
+waicOcc(out.1)
+waicOcc(out.1, by.sp = T)
+```
+
+Can also predict to generate species distribution maps across a region of interest (or generate estimates of community level metrics) - although the vignette doesn't indicate how.. 
