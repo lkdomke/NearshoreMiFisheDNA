@@ -159,13 +159,16 @@ lhs <- read.csv("Data/NearshoreLHSCharacteristics.csv") %>% # clean up a couple 
                 "water_hab" = Pelagic.Demersal,
                 "scale" = Scale.Type)
 
-
+anti_join(edna, seine, by = c("bay_year" = "bay_year")) %>%
+  distinct(alternative_ID, bay_year, habitat, type) # so there are four sites that have eDNA and no seine data
 ```
 
 Subset data cleanup
 ```{r}
 # subset mock community eDNA to just the sites that had both eDNA and seine data - this is removing the sites that had just eDNA
 edna.red <- filter(edna, !(bay_year %in% c("KLWA_A_2021", "BTRB_A_2021", "CLAM_A_2021", "NFEI_B_2021")))
+
+#edna.red <- edna # export a version of the "cleaned combined data" that has all the eDNA sites (including these four sites that have no seine data), for the most part this shoudl remain commented out
 
 edna.wide <- edna.red %>%
   dplyr::select(alternative_ID, habitat, type, Species, raw.mean, bay_year) %>%
@@ -488,6 +491,8 @@ anti_join(comb, site.info2, by = "bay_year")
 # write.csv(wide, "Data/combined_gears_wcomm-4-2-25.csv")
 # write.csv(site.info2, "Data/combined_metadata_4-2-25.csv")
 #write.csv(long, "Data/combined_gear_wcomm_long_4-2-25.csv")
+
+#write.csv(long, "Data/combined_gear_wcomm_extra-eDNA_5-9-25.csv")
 ```
 
 pull out species names

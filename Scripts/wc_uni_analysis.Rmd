@@ -102,6 +102,67 @@ long %>%
   arrange(-sum)# 13 groups for just the lhs characterisitcs, type makes it 26, plus hab make it 78 groups
 ```
 
+Create table of lhs traits and what species compose that
+```{r}
+long %>%
+  left_join(lhs, by = "name") %>%
+  dplyr::select(-c(X, Citation, Notes)) %>%
+  unite(col = "traits", schooling:scale, remove = T, sep = "_") %>%
+  distinct(name, traits) %>%
+  group_by(traits) %>%
+  dplyr::summarize(n())
+
+long %>%
+  left_join(lhs, by = "name") %>%
+  dplyr::select(-c(X, Citation, Notes)) %>%
+  unite(col = "traits", schooling:scale, remove = T, sep = "_") %>%
+  #distinct(name, traits) %>%
+  group_by(traits, type) %>%
+  dplyr::summarize(value.sum = sum(value))
+
+
+
+test <- long %>%
+  left_join(lhs, by = "name") %>%
+  dplyr::select(-c(X, Citation, Notes)) %>%
+  unite(col = "traits", schooling:scale, remove = T, sep = "_") %>%
+  distinct(name, traits) %>%
+  pivot_wider(names_from = "traits", values_from = name, values_fill = NA, values_fn = list) %>%
+  unnest(cols = c(`solitary_demersal_plates`, 
+                  `obligatory schooling_both_scales`, 
+                  `solitary_demersal_scales`, 
+                  `faculative schooling_pelagic_scales`,
+                  `solitary_demersal_no scales`, 
+                  `obligatory schooling_pelagic_deciduous scales`, 
+                  `solitary_demersal_some scales`, 
+                  `obligatory schooling_both_plates`, 
+                  `obligatory schooling_pelagic_scales`, 
+                  `solitary_pelagic_plates`, 
+                  `solitary_pelagic_scales`, 
+                  `obligatory schooling_both_no scales`))
+  
+  
+  
+  unnest_longer(col = `obligatory schooling_both_scales`, keep_empty = TRUE) %>%
+  unnest_longer(col = solitary_demersal_plates) 
+
+  # unnest_wider(col = c(`solitary_demersal_plates`:`obligatory schooling_both_no scales`), names_sep = "_")
+  
+dplyr::summarize(across(where(is.list), unlist),
+                   by = !where(is.list))
+
+!(where)
+
+df <- tibble(
+  x = 1:4,
+  y = list(NULL, 1:3, 4:5, integer())
+)
+df %>% unnest_longer(y)
+
+```
+
+
+
 ```{r}
 library(corrgram)
 
