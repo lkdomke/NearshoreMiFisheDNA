@@ -196,7 +196,7 @@ det ~ scale + school + hab
 ocr ~ habitat + region + doy? 
 
 For detection - lets try creating a similar array as above, but instead of presence/absence we indicate scale type (school and water hab types etc) and build three layers for each trait
-
+* not completed cause this doesn't quite make sense *
 ```{r}
 lhs <- read.csv("Data/NearshoreLHSCharacteristics.csv") %>%
   mutate(Scientific.name = str_trim(Scientific.name, side = "right")) %>%
