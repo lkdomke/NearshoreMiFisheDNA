@@ -13,6 +13,8 @@ library(spOccupancy)
 library(dplyr)
 library(lubridate)
 library(rnaturalearth)
+library(tidyverse)
+library(MCMCvis)
 # if rnaturalearth can't be loaded, try:
 #install.packages("rnaturalearthhires", repos = "https://ropensci.r-universe.dev", type = "source")
 ```
@@ -517,11 +519,15 @@ str(data.list)
 ```
 
 # 3) Fit integrated multi-species occupancy model
+
+We can check a couple things as we wait for this to run, the acceptance values should be generally between 40 - 60. If you see it consistently at 0 or 100 then thats bad and you should go look at that youtube video (linked below for direction)
+
+When looking at the summary the Rhat should be less than 1.1 if not then  you likely need to increase the burn in? 
 ```{r}
 # this takes awhile to run (~ 5 minutes) so don't run it unless you really want to
 out.1 <- intMsPGOcc(occ.formula = ~ as.factor(habitat) + as.factor(region),
-                    det.formula = list(edna = ~ doy,
-                                       seine = ~ doy), 
+                    det.formula = list(edna = ~1,
+                                       seine = ~1), 
                     data = data.list, 
                     # criteria for MCMC samplers
                     n.samples = 20000, # number of iterations
@@ -544,3 +550,31 @@ waicOcc(out.1, by.sp = T)
 ```
 
 Can also predict to generate species distribution maps across a region of interest (or generate estimates of community level metrics) - although the vignette doesn't indicate how.. 
+
+Based off of the youtube video looking at simple single species models we have a couple other posterior summaries checks we can do (see here https://www.youtube.com/watch?v=arYqlfs6lIQ)
+
+```{r}
+# Can look at the bayesian p-value and investigate goodness of fit check with 
+# ppc.out <- ppcOcc(out.1, fit.stat = "freeman-tukey", group = 1)
+# summary(ppc.out) 
+# Not possible yet, under active development
+
+# for posterior summaries
+# look at objects within resulting object
+names(out.1)
+str(out.1$beta.samples)
+
+# create simple plot summaries using MCMCvis package
+# occupancy covariate community effects ---- 
+MCMCplot(out.1$beta.comm.samples, ref_ovl = T, ci = c(50,95))
+# detection covariate effects ----
+MCMCplot(out.1$alpha.comm.samples, ref_ovl = T, ci = c(50, 95))
+MCMCplot(out.1$alpha.samples, ref_ovl = T, ci = c(50, 95))
+
+#MCMCplot(out.1$, ref_ovl = T, ci = c(50, 95))
+
+det.out <- out.1$alpha.samples
+fitted.intMsPGOcc(out.1)
+```
+
+
