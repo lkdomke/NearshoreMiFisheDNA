@@ -4,3 +4,4 @@
 .Ruserdata
 /Data/eDNA_files
 /Data/*output.rds
+/Data/*output*.rds
