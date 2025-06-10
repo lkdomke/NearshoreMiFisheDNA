@@ -1543,56 +1543,51 @@ pcoa.sp.dat$pvals <- pcoa.sp$vectors$pvals
 pcoa.sp.dat$sp_code <- row.names(pcoa.sp.dat)
 pcoa.sp.dat$r2 <- pcoa.sp$vectors$r2
 pcoa.sp.dat.sig <- filter(pcoa.sp.dat, pvals < 0.01)
+```
 
-
-pcoa <- pcoa.bray$points %>%
+PCOA with gear types and traits
+```{r}
+pcoa.points <- pcoa.bray$points %>%
   as_tibble(rownames = "bay_year") %>%
-  left_join(site.info2) %>%
-  # filter(type == "seine",
-  #        habitat == "mixed") %>%
-  ggplot(aes(x = pcoa1, y = pcoa2, fill = type, shape = habitat), 
-         color = "black", linewidth = 1.5) +
-  # geom_hline(aes(yintercept = 0), linetype = "dashed", linewidth = 0.5) +
-  # geom_vline(aes(xintercept = 0), linetype = "dashed", linewidth = 0.5) +
-  # geom_polygon(aes(x = pcoa1, y = pcoa2, group = bay_year2),
-  #              fill = "lightgray", alpha = 0.2,
-  #              data = {pcoa.bray$points %>% as_tibble(rownames = "bay_year") %>%
-  # left_join(site.info) %>% filter(., type == "edna")}) +
-    geom_segment(data = pcoa.sp.dat.sig, aes(x = 0, xend = pcoa1, y = 0, yend = pcoa2),
+  left_join(site.info2)
+
+pcoa <- ggplot() +
+  geom_segment(data = pcoa.sp.dat.sig, aes(x = 0, xend = pcoa1, y = 0, yend = pcoa2),
                inherit.aes=FALSE, linewidth = 1) +  # add arrows
-  geom_point(size = 4) +
+  geom_point(data = pcoa.points, 
+             mapping = aes(pcoa1, pcoa2,
+                       shape = habitat,
+                       fill = type),
+             size = 4) +
   geom_point(data = cent, mapping = aes(pcoa1, pcoa2,
-                                        fill = type, shape = habitat),
-             size = 8, color = "black") +
-  # geom_segment(data = pcoa.dat2, mapping = aes(x = pcoa1, xend = pcoa1end,
-  #                                              y = pcoa2, yend = pcoa2end,
-  # #                                              color = habitat, linetype = type)) +
-  # stat_ellipse(aes(x = pcoa1, y = pcoa2, linetype = habitat, color = type),
-  #              linewidth = 2, level = .95, type = "t") +
+                                        fill = type,
+                                        shape = habitat),
+             size = 8) +
   geom_label_repel(data = pcoa.sp.dat.sig,
                    aes(x = pcoa1, y = pcoa2, label = sp_code),
-                   size = 5, inherit.aes = FALSE,
-                   nudge_x = ifelse(pcoa.sp.dat.sig$pcoa1 >= 0.2, 0.2, -0.2),
-                   nudge_y = ifelse(pcoa.sp.dat.sig$pcoa2 >= -0.1, 0.15, -0.15),
+                   size = 7, inherit.aes = FALSE,
+                   nudge_x = ifelse(pcoa.sp.dat.sig$pcoa1 >= 0.1, 0.1, -0.1),
+                   nudge_y = ifelse(pcoa.sp.dat.sig$pcoa2 >= -0.1, 0.1, -0.1),
                    max.overlaps = getOption("ggrepel.max.overlaps", default = 17)) +
-  scale_fill_manual(name = "Gear Type", 
-                     labels = c("eDNA", "Beach seine"),
-                     values = c("#645FAB", "#BE6E46")) +
-  # scale_linetype_manual(name = "Gear Type", 
-  #                       labels = c("eDNA", "Beach seine"), 
-  #                       values = c("solid", "dashed")) +
-  scale_shape_manual(name = "Habitat", 
+  scale_shape_manual(name = "Habitat",
                      labels = c("Eelgrass", "Understory kelp", "Mixed eelgrass"),
                      values = c(21, 22, 23)) +
-  #theme(legend.position = "none") +
+  scale_fill_manual(name = "Gear type",
+                     labels = c("eDNA", "Beach seine"),
+                     values = c("#5E528C", "#590004")) +
   labs(x = pcoalabs[[1]], y = pcoalabs[[2]]) +
-    plot_theme() +
-    theme(legend.key.width = unit(2, "cm"))
-
-pcoa
+  plot_theme() +
+  theme(legend.key.width = unit(2, "cm"),
+        legend.text = element_text(size = 22),
+        legend.title = element_text(size = 24)) +
+  guides(fill = guide_legend(override.aes = list(shape = 21, size = 5)),
+         shape = guide_legend(override.aes = list(size = 5, fill = "black")))
+# 
 # ggsave(filename = "Images/wc_pcoa_edna-seine_bray.png", plot = pcoa,
-#       height = 8, width = 14)
+#       height = 8, width = 15)
 ```
+
+
 
 ```{r}
 library(flextable)

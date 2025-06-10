@@ -13,6 +13,9 @@ library(spOccupancy)
 library(dplyr)
 library(lubridate)
 library(rnaturalearth)
+library(tidyverse)
+library(bayesplot)
+library(MCMCvis)
 # if rnaturalearth can't be loaded, try:
 #install.packages("rnaturalearthhires", repos = "https://ropensci.r-universe.dev", type = "source")
 ```
@@ -543,17 +546,22 @@ str(data.list)
 # this takes awhile to run (~ 5 minutes) so don't run it unless you really want to
 out.1 <- intMsPGOcc(occ.formula = ~ as.factor(habitat) + as.factor(region),
                     det.formula = list(edna = ~ 1,#as.numeric(scale(doy)), # standardizing/centering
-                                       seine = ~1), 
-                    data = data.list, 
+                                       seine = ~1),
+                    data = data.list,
                     # criteria for MCMC samplers
-                    n.samples = 10000, # number of iterations, default was 6000
+                    n.samples = 50,000, # number of iterations, default was 6000; 50,000 takes like ~35 min and has nice ESS and Rhats but is a big unweildly for some of the outputs. Can also try 30,000 that is perhaps a better run time. 
+                    # 100,000 had too large of a vector to run
                     n.omp.threads = 1, # maybe to run chains in parallel change to 3?
                     verbose = TRUE,
-                    n.report = 200,
+                    n.report = 2000,
                     n.burn = 2000, # burn in period?
-                    n.thin = 4, # this is a thinning rate , default was 1
+                    n.thin = 1, # this is a thinning rate , default was 1
                     n.chains = 3) # no. of chains
 
+# in generally opting for reading in the object rather re-running the model is probably a good policy
+# takes 35 minutes to run and is a large amount of data
+# saveRDS(out.1, file = "Data/intMS_output_50000it.rds")
+# out.1 <- readRDS(file = "Data/intMS_output_50000it.rds") # also takes awhile ~ 5 minutes to save and load this object
 summary(out.1)
 summary(out.1, level = "community")
 summary(out.1, level = "species")
@@ -561,20 +569,20 @@ summary(out.1, level = "species")
 
 Habitat only model
 ```{r}
-out.2 <- intMsPGOcc(occ.formula = ~ as.factor(habitat),
-                    det.formula = list(edna = ~ 1,#as.numeric(scale(doy)), # standardizing/centering
-                                       seine = ~1), 
-                    data = data.list, 
-                    # criteria for MCMC samplers
-                    n.samples = 10000, # number of iterations, default was 6000
-                    n.omp.threads = 1, # maybe to run chains in parallel change to 3?
-                    verbose = TRUE,
-                    n.report = 200,
-                    n.burn = 2000, # burn in period?
-                    n.thin = 4, # this is a thinning rate , default was 1
-                    n.chains = 3) # no. of chains
-
-summary(out.2)
+# out.2 <- intMsPGOcc(occ.formula = ~ as.factor(habitat),
+#                     det.formula = list(edna = ~ 1,#as.numeric(scale(doy)), # standardizing/centering
+#                                        seine = ~1), 
+#                     data = data.list, 
+#                     # criteria for MCMC samplers
+#                     n.samples = 10000, # number of iterations, default was 6000
+#                     n.omp.threads = 1, # maybe to run chains in parallel change to 3?
+#                     verbose = TRUE,
+#                     n.report = 200,
+#                     n.burn = 2000, # burn in period?
+#                     n.thin = 4, # this is a thinning rate , default was 1
+#                     n.chains = 3) # no. of chains
+# 
+# summary(out.2)
 ```
 
 
@@ -603,11 +611,11 @@ Notes from vignette (https://doserlab.com/files/spoccupancy-web/articles/modelfi
 Can calculate WAIC for the model to compare if we specify different formulas
 and also by species
 ```{r}
-waicOcc(out.1) - waicOcc(out.2) # negative meaning that the model with region is preferred. Lets do some checks with that
+# waicOcc(out.1) - waicOcc(out.2) # negative meaning that the model with region is preferred. Lets do some checks with that
 # small waic indicate models with better performance.
 # we're not trying to do out of sample prediction but if we were, we should do a k-fold cross validation approach. 
 
-waicOcc(out.1, by.sp = T)
+# waicOcc(out.1, by.sp = T)
 ```
 
 ## check rhat and ESS
@@ -633,12 +641,13 @@ summary(out.1$rhat$alpha) # below 1.1
 # Not exactly sure what ESS should be
 # above 1000 - great, 200-1000 medium, <100 low
 # medium might indicate some level of autocorrelation
-summary(out.1$ESS$alpha.comm) # min 396, max 510, okay
-summary(out.1$ESS$beta.comm) # min 390, max 1150 okay
-summary(out.1$ESS$tau.sq.beta) # min 325, max 593 (getting low)
-summary(out.1$ESS$tau.sq.alpha) # min 375, max 1023 okay
-summary(out.1$ESS$beta) # min 197 (don't love this), max 5033 SP level occurrence coef
-summary(out.1$ESS$alpha) # min 321, max 6292
+summary(out.1$ESS$alpha.comm) # min 396, max 510, okay; new min 2249 (50,000 iterations)
+summary(out.1$ESS$beta.comm) # min 390, max 1150 okay; new min 2145
+summary(out.1$ESS$tau.sq.beta) # min 325, max 593 (getting low); new min 1421
+summary(out.1$ESS$tau.sq.alpha) # min 375, max 1023 okay; new min 2005
+summary(out.1$ESS$beta) # min 197 (don't love this), max 5033 SP level occurrence coef; new min 1331
+summary(out.1$ESS$alpha) # min 321, max 6292; new min 2241
+
 ```
 
 ## MCMC chains convergence: 
@@ -647,12 +656,14 @@ summary(out.1$ESS$alpha) # min 321, max 6292
 plot(out.1, param = "beta.comm", density = F)
 plot(out.1, param = "alpha.comm", density = F) # intercept only detection
 # the alpha comm is... okay but doesn't seem as nice as some of the beta comm
-plot(out.1, param = "beta", density = F) # these are spec specific occurence coef
-# this rotates through the species so you have to pay close attention
-plot(out.1, param = "alpha", density = F) # i think decent?, trichodon tichodon isn't the nicest
+
+# this rotates through each species but takes a long time with this many species 
+# plot(out.1, param = "beta", density = F) # these are spec specific occurence coef
+# # this rotates through the species so you have to pay close attention
+# plot(out.1, param = "alpha", density = F) # i think decent?, trichodon tichodon isn't the nicest
 
 # i think we can also use the mcmc_trace from 
-mcmc_trace(out.1$alpha.comm.samples) # looks good, detection (intercept only)
+mcmc_trace(out.1$alpha.comm.samples) #  looks good, detection (intercept only)
 mcmc_trace(out.1$beta.comm.samples) # looks good, habitat/region
 mcmc_trace(out.1$alpha.samples) # species specific detection kinda hard to tell but looks okay?
 # could probably do this neater in a forloop
@@ -669,17 +680,21 @@ mcmc_trace(out.1$tau.sq.beta.samples) # NOT GOOD; how do we fix this?
 
 
 ## Posterior predictive checks w/ simulated data
+
+From Jeff Doser package developer: If you wanted, you could likely manually derive some different types of GoF tests using the existing functionality by using the detection regression coefficient values (the "alpha.samples") to predict "replicate data" points for the observed data points for each of your different gear types, and then comparing those replicate data predictions to those of the actual data in some way. This is effectively what the ppcOcc function would do. 
+
+Alternatively, you could check out the code from [this](https://besjournals.onlinelibrary.wiley.com/doi/full/10.1111/2041-210X.13811) paper of mine which fit a similar type of model in NIMBLE and included some code for posterior predictive checks.
 ```{r}
-hist(out.1$beta.samples)
-posterior.beta <- out.1$beta.samples
-str(posterior.beta)
-
-predict(out.1)
-
-simIntMsOcc(posterior.beta)
-
-head(out.1$beta.comm.samples)
-str(out.1$beta.comm.samples)
+# hist(out.1$beta.samples)
+# posterior.beta <- out.1$beta.samples
+# str(posterior.beta)
+# 
+# predict(out.1)
+# 
+# simIntMsOcc(posterior.beta)
+# 
+# head(out.1$beta.comm.samples)
+# str(out.1$beta.comm.samples)
 ```
 
 ## posterior summaries
@@ -696,7 +711,9 @@ MCMCplot(out.1$alpha.comm.samples) # intercept only for detection
 Can also predict to generate species distribution maps across a region of interest (or generate estimates of community level metrics) - although the vignette doesn't indicate how... 
 
 Shannon: For mapping you'd need some spatial data (points, polygons, or raster files) for all of your occupancy covariates)
-....
+
+***
+
 # 5) 2-stage model for postHoc testing
 Grab the posteriors for detection models (and spit into separate matrices)
 (Let's assume you've got a model you like called 'out.1' , all the Rhats and ESS look good, the posterior predictive checks look nice and you're ready to go to your second stage model to see how species traits)
@@ -850,23 +867,32 @@ levels(as.factor(PH.covs$schooling)) # solitary ref level
 levels(as.factor(PH.covs$water_hab)) # pelagic ref level
 
 # converts it to factor and uses that order
-str(post.enda$beta.samples)
+str(post.edna$beta.samples)
 str(post.seine$beta.samples)
 summary(post.edna$beta.samples)
 
+conv.edna <- plogis(post.edna$beta.samples)
+conv.seine <- plogis(post.seine$beta.samples)
+
+#png("Images/Trait_Detection_Params.png", height = 8, width = 10, units = "in", res = 400)
 MCMCplot(object = post.edna$beta.samples, # enda
          object2 = post.seine$beta.samples, # seine
          ci = c(50, 95), 
-         col = "#645FAB", 
-         col2 = "#BE6E46", 
-         offset = 0.14,
-         ref_ovl = F
-         )
-
+         col = "#5E528C", 
+         col2 = "#590004", 
+         offset = 0.1,
+         #guide_lines = T, 
+         ref_ovl = T,
+         labels = c("Intercept [Scales, Solitary, Demersal]", 
+                    "Deciduous scales", "No scales", "Plates", "Some scales", 
+                    "Faculative schooling", "Obligatory schooling", "Both demersal/pelagic", "Pelagic"),
+         sz_labels = 1.2,
+         sz_med = 2, sz_thick = 6, sz_thin = 3)
+#dev.off()
 
 # so for this one the sign variable are plates which has a mean of -4.5
 #exp(-4.5595)  = 0.01046
-# so after accounting for presence/occupancy the odds of detecting a fish with plates compared to the reference level of a fish (facultative, with deciduous scale, both pelagic and benthic) then its 0.01 as likely as detecting the ref level fish?
+# so after accounting for presence/occupancy the odds of detecting a fish with plates compared to the reference level of a fish (facultative, with deciduous scale, both pelagic and benthic) then its 0.01 as likely as detecting the ref level fish? See email from shannon for more information
 
 #MCMCplot(out.22$beta.samples, ref_ovl = T, ci = c(50,95))
 MCMCplot(post.edna$beta.samples, ref_ovl = T, ci = c(50,95))
