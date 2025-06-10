@@ -22,7 +22,7 @@ library(MCMCvis)
 
 # 1) format data for input to spOccupancy
 
-# Read in data
+## Read in data
 Cleaned in a different script (sourced here)
 ```{r}
 #source("Scripts/mock community analysis/spOccupancy_data_cleaning.R")
@@ -600,14 +600,9 @@ Notes from vignette (https://doserlab.com/files/spoccupancy-web/articles/modelfi
 3. Compute a fit statistic on both the actual data and also on the model-generated ‘replicate data’.
 4. Compare the fit statistics for the true data and replicate data. If they are widely different, this suggests a lack of fit of the model to the actual data set at hand.
 
-*Note as in vignette posterior checks haven't been implemented for integrated multispecies models yet, for now I'm going to see if I can implement Shannon's 2-stage code and then come back to this*
-```{r}
-# ppc.out <- ppcOcc(out.1, fit.stat = "freeman-tukey", group = 1)
-# summary(ppc.out)
-# simultating data does work
-# simIntMsOcc
-```
-## inclusions of region?
+*Note as in vignette posterior checks haven't been implemented for integrated multispecies models yets*
+
+## Test inclusions of region?
 Can calculate WAIC for the model to compare if we specify different formulas
 and also by species
 ```{r}
@@ -667,15 +662,15 @@ mcmc_trace(out.1$alpha.comm.samples) #  looks good, detection (intercept only)
 mcmc_trace(out.1$beta.comm.samples) # looks good, habitat/region
 mcmc_trace(out.1$alpha.samples) # species specific detection kinda hard to tell but looks okay?
 # could probably do this neater in a forloop
-mcmc_trace(out.1$beta.samples[,c(1:50)]) # species specific occurrence, showing 50 at a time # questionable ones: Anoplopoma firma, Blepsias
-mcmc_trace(out.1$beta.samples[,c(51:100)]) # looks... okay
-mcmc_trace(out.1$beta.samples[,c(101:170)])
-mcmc_trace(out.1$beta.samples[,c(171:240)])
-mcmc_trace(out.1$beta.samples[,c(241:330)])
-mcmc_trace(out.1$beta.samples[,c(331:400)])
-mcmc_trace(out.1$beta.samples[,c(401:490)])
+# mcmc_trace(out.1$beta.samples[,c(1:50)]) # species specific occurrence, showing 50 at a time # questionable ones: Anoplopoma firma, Blepsias
+# mcmc_trace(out.1$beta.samples[,c(51:100)]) # looks... okay
+# mcmc_trace(out.1$beta.samples[,c(101:170)])
+# mcmc_trace(out.1$beta.samples[,c(171:240)])
+# mcmc_trace(out.1$beta.samples[,c(241:330)])
+# mcmc_trace(out.1$beta.samples[,c(331:400)])
+# mcmc_trace(out.1$beta.samples[,c(401:490)])
 mcmc_trace(out.1$tau.sq.alpha.samples) # not positive what tau is rn, looks fine
-mcmc_trace(out.1$tau.sq.beta.samples) # NOT GOOD; how do we fix this? 
+mcmc_trace(out.1$tau.sq.beta.samples) # I don't know about this... bad?; how do we fix this? 
 ```
 
 
@@ -705,8 +700,6 @@ levels(as.factor(site.region$habitat)) # ref level eelgrass
 MCMCplot(out.1$beta.comm.samples, ref_ovl = T, ci = c(50, 95)) # occurrence parameter estimates compared to the reference level of eelgrass
 MCMCplot(out.1$alpha.comm.samples) # intercept only for detection
 ```
-
-
 
 Can also predict to generate species distribution maps across a region of interest (or generate estimates of community level metrics) - although the vignette doesn't indicate how... 
 
