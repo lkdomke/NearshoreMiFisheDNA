@@ -549,7 +549,7 @@ out.1 <- intMsPGOcc(occ.formula = ~ as.factor(habitat) + as.factor(region),
                                        seine = ~1),
                     data = data.list,
                     # criteria for MCMC samplers
-                    n.samples = 50,000, # number of iterations, default was 6000; 50,000 takes like ~35 min and has nice ESS and Rhats but is a big unweildly for some of the outputs. Can also try 30,000 that is perhaps a better run time. 
+                    n.samples = 50000, # number of iterations, default was 6000; 50,000 takes like ~35 min and has nice ESS and Rhats but is a big unweildly for some of the outputs. Can also try 30,000 that is perhaps a better run time. 
                     # 100,000 had too large of a vector to run
                     n.omp.threads = 1, # maybe to run chains in parallel change to 3?
                     verbose = TRUE,
@@ -881,6 +881,9 @@ MCMCplot(object = post.edna$beta.samples, # enda
                     "Faculative schooling", "Obligatory schooling", "Both demersal/pelagic", "Pelagic"),
          sz_labels = 1.2,
          sz_med = 2, sz_thick = 6, sz_thin = 3)
+legend(x = "topright", legend =c("eDNA", "Beach seines"),
+       fill = c("#9c91ca", "#ac6162"), yjust = 1,
+       title = "Gear type", bty = "n")
 #dev.off()
 
 # so for this one the sign variable are plates which has a mean of -4.5
