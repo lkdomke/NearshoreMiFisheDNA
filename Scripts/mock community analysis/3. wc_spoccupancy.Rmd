@@ -883,7 +883,7 @@ MCMCplot(object = post.edna$beta.samples, # enda
          sz_med = 2, sz_thick = 6, sz_thin = 3)
 legend(x = "topright", legend =c("eDNA", "Beach seines"),
        fill = c("#9c91ca", "#ac6162"), yjust = 1,
-       title = "Gear type", bty = "n")
+       title = "Gear type", bty = "n", cex = 1.2)
 #dev.off()
 
 # so for this one the sign variable are plates which has a mean of -4.5
