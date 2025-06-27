@@ -1,4 +1,5 @@
 # PPC function with separate p-values for each data source
+
 ppcOcc_intMsPGOcc <- function(object, fit.stat = "chi-squared",  thin.by = 1) {
   
   # Input validation
@@ -210,7 +211,6 @@ ppcOcc_intMsPGOcc <- function(object, fit.stat = "chi-squared",  thin.by = 1) {
     # Model info
     n_samples = n_samples,
     n_data_sources = n_data,
-    group = group,
     fit.stat = fit.stat,
     source_names = source_names
   )
@@ -219,3 +219,4 @@ ppcOcc_intMsPGOcc <- function(object, fit.stat = "chi-squared",  thin.by = 1) {
 }
 
 ppcOut <- ppcOcc_intMsPGOcc(out.1, "chi-squared", thin.by=100)
+
