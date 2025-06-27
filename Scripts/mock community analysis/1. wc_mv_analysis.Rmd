@@ -280,7 +280,7 @@ edna.corrected <- left_join(edna.com, taxongrp, by = c("taxon" = "species")) %>%
 ## max for rockfish at HARM_A is copper/quillback so sebastes caurinus will work cause it'll get grouped to the same sebastes match
 ##############################################
 
-seine.corrected <- seine %>% # first fix the unflat, unscul, unrock species with max sp at the site
+seine.corrected2 <- seine %>% # first fix the unflat, unscul, unrock species with max sp at the site
   mutate(species_scientific = ifelse(sp_code == "UNFLAT", "Parophrys vetulus", species_scientific),
          species_scientific = ifelse(sp_code == "UNSCUL", "Artedius spp.", species_scientific),
          species_scientific = ifelse(sp_code == "UNROCK", "Sebastes caurinus", species_scientific)) %>%
@@ -293,7 +293,8 @@ seine.corrected <- seine %>% # first fix the unflat, unscul, unrock species with
   left_join(taxongrp, by = c("species_scientific" = "species")) %>%
   # dplyr::select(-c(bay_year, bay_id, habitat, fork_length, mass_g, abundance, type)) %>%
   # distinct() %>%
-  mutate(corrected_sp = ifelse(is.na(taxon), species_scientific, taxon)) %>%
+  mutate(corrected_sp = ifelse(is.na(taxon), species_scientific, taxon)) 
+seine.corrected<- seine.corrected2 %>%
   group_by(bay_year, habitat, corrected_sp, type) %>%
   dplyr::summarise(value = sum(abundance)) %>%
   mutate(bay_year2 = bay_year) %>%
@@ -1560,9 +1561,9 @@ pcoa <- ggplot() +
                        fill = type),
              size = 4) +
   geom_point(data = cent, mapping = aes(pcoa1, pcoa2,
-                                        fill = type,
+                                        color = type,
                                         shape = habitat),
-             size = 8) +
+             size = 8, stroke = 2) +
   geom_label_repel(data = pcoa.sp.dat.sig,
                    aes(x = pcoa1, y = pcoa2, label = sp_code),
                    size = 7, inherit.aes = FALSE,
@@ -1575,6 +1576,9 @@ pcoa <- ggplot() +
   scale_fill_manual(name = "Gear type",
                      labels = c("eDNA", "Beach seine"),
                      values = c("#9c91ca", "#ac6162")) +
+  scale_color_manual(name = "Gear type",
+                     labels = c("eDNA", "Beach seine"),
+                     values = c("#9c91ca", "#ac6162")) +
   labs(x = pcoalabs[[1]], y = pcoalabs[[2]]) +
   plot_theme() +
   theme(legend.key.width = unit(2, "cm"),
@@ -1584,7 +1588,7 @@ pcoa <- ggplot() +
          shape = guide_legend(override.aes = list(size = 5, fill = "black")))
 pcoa
 # 
-# ggsave(filename = "Images/wc_pcoa_edna-seine_bray.png", plot = pcoa,
+# ggsave(filename = "Images/wc_pcoa_edna-seine_bray_6-25-25.png", plot = pcoa,
 #       height = 8, width = 15)
 ```
 
@@ -1962,6 +1966,7 @@ https://apsjournals.apsnet.org/doi/10.1094/PHYTO-12-19-0462-LE?url_ver=Z39.88-20
 Input is a species matrix, unsure if it should be standardized first or not (documentation doesn't have standardization, but the example I'm following does)
 Should probably try both and compare result. 
 ```{r}
+set.seed(55)
 # make sure we have even breakdown of samples by site
 test2 <- site.info2 %>%
   ungroup() %>%
@@ -1976,7 +1981,7 @@ head(site.info2)
 
 # Non standardized
 # note for restricting certain groups we have to understand that multipatt considers the groups as integers, so groups by themselves are first 1:n, and then combinations are listed after n. So for interaction; the first four groups are 1:4, 5+ arecombinations based on group1+2 = 5; group1+3 = 6 etc. 
-#set.seed(09281992)
+
 all.comb <- multipatt(wide, cluster = site.info2$intx, func = "IndVal.g")
 colnames(as.data.frame(all.comb$comb)) # use this to determine which sensicle combinations should be included. 
 
@@ -1986,7 +1991,7 @@ colnames(as.data.frame(all.comb$comb)) # use this to determine which sensicle co
 #                    restcomb = c(1:8, 10, 13, 15, 16, 17, 20, 21, 27, 36)) # only including sensical
 #combinations
 indic <- multipatt(wide, cluster = site.info2$intx, func = "IndVal.g",
-                   restcomb = c(1:9, 12, 17, 19:22, 41)) 
+                   restcomb = c(1:9, 12, 15, 17, 19:22, 41)) 
 
 summary(indic, alpha = 0.05, indvalcomp = TRUE)
 
@@ -1996,8 +2001,8 @@ summary(indic, alpha = 0.05, indvalcomp = TRUE)
 #                       "eDNA", "Seine", "Both gears", "eDNA", "Seine"))
 
 nested <- data.frame(nested = c("eDNA", "eDNA", "eDNA", "Seine", "Seine", "Seine",
-                      "eDNA", "eDNA","Both gears", "eDNA", "Both gears", "Seine",
-                      "Seine", "Seine", "eDNA", "Seine"))
+                      "eDNA", "eDNA","Both gears", "eDNA", "Both gears", "Both gears",
+                      "Seine","Seine", "Seine", "eDNA", "Seine"))
 
 comb <- as.data.frame(indic$comb)
 combinations <- as.data.frame(colnames(comb)) %>%
@@ -2222,18 +2227,109 @@ isa.plot<- ggplot() +
          fill = guide_colourbar(barheight = 10,
                                 barwidth = 1.5)) +
   theme(strip.placement = "outside") +
-  facet_row("nested", strip.position = "bottom", scales = "free_x",
+  facet_row("nested", strip.position = "top", scales = "free_x",
              space = "free") +
   theme(strip.background = element_rect(fill = "transparent", color = "gray"),
         strip.text = element_text(size = 22),
         axis.text.x = element_text(size = 20),
-        axis.text.y = element_text(size = 22),
+        axis.text.y = element_text(size = 22, face = "italic"),
         axis.title.x = element_text(size = 22),
         axis.title.y = element_text(size = 22))
 isa.plot  
 
 
-# ggsave(plot = isa.plot, filename = "Images/updated_isa_plot_3-21-25.png", width = 14, height = 8)
+# ggsave(plot = isa.plot, filename = "Images/updated_isa_plot_6-25-25.png", width = 16, height = 8)
+```
+
+
+## ISA sp in seine w/ abund
+```{r}
+head(seine.corrected2)
+head(heatmapdat)
+seine.sp <- filter(heatmapdat, nested == "Both gears" | nested == "Seine") %>%
+  distinct(rn)
+
+# create a few groups for 
+s.eel <- seine.corrected2 %>%
+  filter(corrected_sp %in% seine.sp$rn,
+         type == "seine", 
+         habitat == "eelgrass") %>%
+  group_by(corrected_sp, habitat) %>%
+  dplyr::summarize(sum = sum(abundance)) %>%
+  mutate(comb = "Seine: eelgrass")
+
+s.kelp <- seine.corrected2 %>%
+  filter(corrected_sp %in% seine.sp$rn,
+         type == "seine", 
+         habitat == "kelp") %>%
+  group_by(corrected_sp, habitat) %>%
+  dplyr::summarize(sum = sum(abundance)) %>%
+  mutate(comb = "Seine: kelp")
+
+s.mixed <- seine.corrected2 %>%
+  filter(corrected_sp %in% seine.sp$rn,
+         type == "seine", 
+         habitat == "mixed") %>%
+  group_by(corrected_sp, habitat) %>%
+  dplyr::summarize(sum = sum(abundance)) %>%
+  mutate(comb = "Seine: mixed")
+
+s.eelkelp <- seine.corrected2 %>%
+  filter(corrected_sp %in% seine.sp$rn,
+         type == "seine", 
+         habitat != ("mixed")) %>%
+  group_by(corrected_sp) %>%
+  dplyr::summarize(sum = sum(abundance)) %>%
+  mutate(comb = "Seine: eelgrass & kelp")
+
+s.eelmixed <- seine.corrected2 %>%
+  filter(corrected_sp %in% seine.sp$rn,
+         type == "seine", 
+         habitat != "kelp") %>%
+  group_by(corrected_sp) %>%
+  dplyr::summarize(sum = sum(abundance)) %>%
+  mutate(comb = "Seine: eelgrass & mixed")
+
+s.kelpmixed <- seine.corrected2 %>%
+  filter(corrected_sp %in% seine.sp$rn,
+         type == "seine", 
+         habitat != "eelgrass") %>%
+  group_by(corrected_sp) %>%
+  dplyr::summarize(sum = sum(abundance)) %>%
+  mutate(comb = "Seine: kelp & mixed")
+
+s.all <- seine.corrected2 %>%
+  filter(corrected_sp %in% seine.sp$rn,
+         type == "seine") %>%
+  group_by(corrected_sp) %>%
+  dplyr::summarize(sum = sum(abundance)) %>%
+  mutate(comb = "Seine: all habitats")
+
+abundheatdat<- rbind(s.eel, s.mixed, s.kelp, s.kelpmixed, s.eelmixed, s.all) %>%
+   mutate(comb = factor(comb, levels = c("Seine: eelgrass", "Seine: mixed", "Seine: kelp",
+                                        "Seine: eelgrass & kelp", "Seine: eelgrass & mixed",
+                                        "Seine: kelp & mixed", "Seine: all habitats")),
+          corrected_sp = factor(corrected_sp, levels = c("Artedius spp.","Hexagrammos",
+                                                         "Clupea pallasii", "Lumpenus sagitta",
+                                                         "Syngnathus leptorhynchus", "Cottus_Leptocottus",
+                                                         "Anoplarchus", "Sebastes 1","Aulorhynchus flavidus", 
+                                                         "Hemilepidotus spp.", "Apodichthys flavidus",
+                                                         "Blepsias cirrhosus", "Ophiodon elongatus",
+                                                         "Brachyistius frenatus", "Oxylebius pictus")))
+
+
+
+ggplot() +
+   geom_tile(data = abundheatdat,
+            aes(x = as.factor(comb), y = corrected_sp, fill = log(sum))) +
+  scale_fill_continuous(type = "viridis") +
+  plot_theme() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(x = "Gear type & Habitat combinations",
+       y = "Species", fill = "Log(total abundance)") +
+  guides(color = "none",
+         fill = guide_colourbar(barheight = 10,
+                                barwidth = 1.5))
 ```
 
 
