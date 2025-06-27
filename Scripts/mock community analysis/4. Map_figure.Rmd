@@ -71,6 +71,66 @@ table(seine.info$habitat)
 
 ```
 
+Add region
+```{r}
+library(sf)
+# head(sites)
+# table(sites$habitat)
+head(seine.info)
+table(seine.info$habitat)
+
+# the polygons from naturalearth also plot way faster than the detailed shapefiles I have
+world <- ne_countries(scale = 10, returnclass = "sf")
+usa <- ne_states("United States of America", returnclass = "sf") # simple features
+ak.small <- subset(usa, name == "Alaska") %>% # Subset ak from the usa object for small AK inset
+  st_transform(., crs = st_crs(26908))
+
+# sites.sf <- st_as_sf(sites, coords = c("longitude", "latitude"), crs = 4326) %>%
+#   st_transform(., crs = st_crs(26908))
+
+
+ak.crop <- ak.small %>%
+  st_transform(., crs = st_crs(26908)) %>%
+  st_crop(ak, xmin = 513765.8, xmax = 760892.3,
+          ymin = 6054378, ymax = 6247162)
+
+# ggplot() +
+#   geom_sf(ak.crop, mapping = aes(), fill = "#999999") +
+#   geom_sf(sites.sf, mapping = aes(fill = habitat),
+#           size = 5, alpha = 0.8, shape = 21) +
+#   scale_fill_manual(values = c("#327610", "#E4572E", "#E1AD01"),
+#                     labels = c("Eelgrass",
+#                                "Understory kelp",
+#                                "Mixed eelgrass"),
+#                     name = "Sample locations")
+
+# whats the best way to dummy assign a region to these? Probably could do it by hand?
+# could do ktn area (n = 10), southern tip (n = 6), offshore mid (n = 5), near craig (n = 10), then north the cut (n = 6)
+
+site.region <- seine.info %>%
+  mutate(region = NA,
+         region = ifelse(longitude > -132, "Ktn", region),
+         region = ifelse(is.na(region) & latitude < 55, "South", region),
+         region = ifelse(is.na(region) & latitude > 55.42 & latitude < 55.6, "Craig", region),
+         region = ifelse(is.na(region) & latitude > 55.6, "North", region),
+         region = ifelse(is.na(region), "Mid", region))
+
+site.region.sf <- st_as_sf(site.region, coords = c("longitude", "latitude"), crs = 4326) %>%
+  st_transform(., crs = st_crs(26908))
+
+ggplot() +
+  geom_sf(ak.crop, mapping = aes(), fill = "#999999") +
+  geom_sf(site.region.sf, mapping = aes(fill = region),
+          size = 5, alpha = 0.8, shape = 21)
+
+site.region2 <- site.region %>%
+  dplyr::select(bay_year, bay_year2, region)
+
+sites <- sites %>%
+  left_join(site.region2)
+```
+
+
 
 # inset map
 
@@ -148,37 +208,41 @@ main map
 main_map <- ggplot() +
   #geom_sf(canada.crop.proj, mapping = aes(), fill = "#999999") +
   geom_sf(ak.crop, mapping = aes(), fill = "#999999") +
-  geom_sf(sites.26908, mapping = aes(fill = habitat, shape = habitat, size = habitat), 
-          color = "black") +
-  scale_shape_manual(values = c(21, 24, 23),
-                     labels = c("Eelgrass",
-                                "Understory kelp",
-                                "Mixed eelgrass"),
+  geom_sf(sites.26908, mapping = aes(fill = habitat, shape = region#, size = habitat
+                                     ), 
+          color = "black", size = 4) +
+  scale_shape_manual(values = c(21, 22, 23, 24, 25),
+                     labels = c("Region 1",
+                                "Region 2",
+                                "Region 3",
+                                "Region 4", 
+                                "Region 5"),
                      name = "Sample locations") +
   scale_fill_manual(values = c("#327610", "#E4572E", "#E1AD01"),
                     labels = c("Eelgrass",
                                "Understory kelp",
                                "Mixed eelgrass"),
-                    name = "Sample locations") +
-  scale_size_manual(values = c(5,4,4),
-                    labels = c("Eelgrass",
-                               "Understory kelp",
-                               "Mixed eelgrass"),
-                    name = "Sample locations") +
+                    name = "Habitat") +
+  # scale_size_manual(values = c(5,4,4),
+  #                   labels = c("Eelgrass",
+  #                              "Understory kelp",
+  #                              "Mixed eelgrass"),
+  #                   name = "Sample locations") +
   coord_sf(expand = FALSE) +
   labs(x = "Longitude", y = "Latitude") +
   geom_sf_label(labels.prj, mapping = aes(label = Text), family = "Calibri", size = 6) +
   plot_theme() +
   theme(legend.position = "inside",
-        legend.position.inside = c(0.12,0.15),
+        legend.position.inside = c(0.12,0.24),
         #legend.text = element_markdown(size = 15),
         legend.spacing.y = unit(0, "cm"),
         axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
   annotation_scale(text_family = "Calibri", text_cex = 1.5, line_width = 2) +
   annotation_north_arrow(which_north = "true", location = "bl", height = unit(2, "cm"),
-                         pad_x = unit(7,"cm"), pad_y = unit(1, "cm"))
+                         pad_x = unit(7,"cm"), pad_y = unit(1, "cm")) +
+  guides(fill = guide_legend(override.aes = list(shape = 21, size = 4)))
 
-#main_map
+main_map
 ```
 
 together!
@@ -188,7 +252,7 @@ together!
 
 final <- main_map + inset_element(inset, 0.66, 0.66, 1, 1, align_to = "plot", ignore_tag = TRUE)
 # final
-# ggsave(filename = "Images/map_figure_adj.png",
+# ggsave(filename = "Images/map_figure_adj_6-25-25.png",
 #        plot = final,
 #        height = 16,
 #        width = 12)
