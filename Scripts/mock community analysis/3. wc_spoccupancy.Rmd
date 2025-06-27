@@ -855,6 +855,7 @@ summary(post.seine$ESS$tau.sq) # min/max 833.6
 ## Model output 
 Can we replicate this example to enhance our understanding here
 ```{r}
+library(kableExtra)
 levels(as.factor(PH.covs$scale)) # scales are ref
 levels(as.factor(PH.covs$schooling)) # solitary ref level
 levels(as.factor(PH.covs$water_hab)) # pelagic ref level
@@ -862,7 +863,24 @@ levels(as.factor(PH.covs$water_hab)) # pelagic ref level
 # converts it to factor and uses that order
 str(post.edna$beta.samples)
 str(post.seine$beta.samples)
-summary(post.edna$beta.samples)
+sum.edna <- summary(post.edna$beta.samples)
+
+edna.summary <- as.data.frame(cbind(sum.edna$statistics[,c(1:2)], exp(sum.edna$statistics[,c(1:2)])))
+colnames(edna.summary) <- c("Mean", "SD", "Odds-ratio mean", "Exp SD")
+
+kable(edna.summary, row.names = T, caption = "eDNA detection probabilites") %>%
+     column_spec (1:5, border_left = T, border_right = T) %>% 
+     kable_styling()
+
+sum.seine <- summary(post.seine$beta.samples)
+seine.summary <- as.data.frame(cbind(sum.seine$statistics[,c(1:2)], exp(sum.seine$statistics[,c(1:2)])))
+colnames(seine.summary) <- c("Mean", "SD", "Odds-ratio mean", "Exp SD")
+kable(seine.summary, row.names = T, caption = "Beach seine detection probabilites") %>%
+     column_spec (1:5, border_left = T, border_right = T) %>% 
+     kable_styling()
+
+
+summary(post.seine$beta.samples)
 
 conv.edna <- plogis(post.edna$beta.samples)
 conv.seine <- plogis(post.seine$beta.samples)
