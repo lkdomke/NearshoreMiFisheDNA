@@ -218,5 +218,4 @@ ppcOcc_intMsPGOcc <- function(object, fit.stat = "chi-squared",  thin.by = 1) {
   return(results)
 }
 
-ppcOut <- ppcOcc_intMsPGOcc(out.1, "chi-squared", thin.by=100)
 

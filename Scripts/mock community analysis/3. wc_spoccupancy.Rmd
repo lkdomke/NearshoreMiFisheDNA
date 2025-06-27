@@ -26,6 +26,7 @@ library(MCMCvis)
 Cleaned in a different script (sourced here)
 ```{r}
 #source("Scripts/mock community analysis/spOccupancy_data_cleaning.R")
+source(file = "Scripts/mock community analysis/ppc_integratedMsPGOcc.R")
 long <- read.csv("Data/spOccupancy_fishdat_long_5-14-25.csv")
 sites <- read.csv("Data/spOccupancy_fishdat_sites_5-14-25.csv")
 
@@ -679,17 +680,14 @@ mcmc_trace(out.1$tau.sq.beta.samples) # I don't know about this... bad?; how do 
 From Jeff Doser package developer: If you wanted, you could likely manually derive some different types of GoF tests using the existing functionality by using the detection regression coefficient values (the "alpha.samples") to predict "replicate data" points for the observed data points for each of your different gear types, and then comparing those replicate data predictions to those of the actual data in some way. This is effectively what the ppcOcc function would do. 
 
 Alternatively, you could check out the code from [this](https://besjournals.onlinelibrary.wiley.com/doi/full/10.1111/2041-210X.13811) paper of mine which fit a similar type of model in NIMBLE and included some code for posterior predictive checks.
+
+Shannon took these examples and created a custom function to do this (sourced at beginning of script)
 ```{r}
-# hist(out.1$beta.samples)
-# posterior.beta <- out.1$beta.samples
-# str(posterior.beta)
-# 
-# predict(out.1)
-# 
-# simIntMsOcc(posterior.beta)
-# 
-# head(out.1$beta.comm.samples)
-# str(out.1$beta.comm.samples)
+
+ppcOut <- ppcOcc_intMsPGOcc(out.1, "chi-squared", thin.by=100)
+
+# we're looking for values between 0.1 and 0.9 and if they are, we're okay to move forward. 
+
 ```
 
 ## posterior summaries
