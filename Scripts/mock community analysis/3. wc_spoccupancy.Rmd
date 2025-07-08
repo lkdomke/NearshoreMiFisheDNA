@@ -545,24 +545,24 @@ str(data.list)
 # 3) Fit integrated multi-species occupancy model
 ```{r}
 # this takes awhile to run (~ 5 minutes) so don't run it unless you really want to
-out.1 <- intMsPGOcc(occ.formula = ~ as.factor(habitat) + as.factor(region),
-                    det.formula = list(edna = ~ 1,#as.numeric(scale(doy)), # standardizing/centering
-                                       seine = ~1),
-                    data = data.list,
-                    # criteria for MCMC samplers
-                    n.samples = 50000, # number of iterations, default was 6000; 50,000 takes like ~35 min and has nice ESS and Rhats but is a big unweildly for some of the outputs. Can also try 30,000 that is perhaps a better run time. 
-                    # 100,000 had too large of a vector to run
-                    n.omp.threads = 1, # maybe to run chains in parallel change to 3?
-                    verbose = TRUE,
-                    n.report = 2000,
-                    n.burn = 2000, # burn in period?
-                    n.thin = 1, # this is a thinning rate , default was 1
-                    n.chains = 3) # no. of chains
+# out.1 <- intMsPGOcc(occ.formula = ~ as.factor(habitat) + as.factor(region),
+#                     det.formula = list(edna = ~ 1,#as.numeric(scale(doy)), # standardizing/centering
+#                                        seine = ~1),
+#                     data = data.list,
+#                     # criteria for MCMC samplers
+#                     n.samples = 50000, # number of iterations, default was 6000; 50,000 takes like ~35 min and has nice ESS and Rhats but is a big unweildly for some of the outputs. Can also try 30,000 that is perhaps a better run time. 
+#                     # 100,000 had too large of a vector to run
+#                     n.omp.threads = 1, # maybe to run chains in parallel change to 3?
+#                     verbose = TRUE,
+#                     n.report = 2000,
+#                     n.burn = 2000, # burn in period?
+#                     n.thin = 1, # this is a thinning rate , default was 1
+#                     n.chains = 3) # no. of chains
 
 # in generally opting for reading in the object rather re-running the model is probably a good policy
 # takes 35 minutes to run and is a large amount of data
 # saveRDS(out.1, file = "Data/intMS_output_50000it.rds")
-# out.1 <- readRDS(file = "Data/intMS_output_50000it.rds") # also takes awhile ~ 5 minutes to save and load this object
+out.1 <- readRDS(file = "Data/intMS_output_50000it.rds") # also takes awhile ~ 5 minutes to save and load this object
 summary(out.1)
 summary(out.1, level = "community")
 summary(out.1, level = "species")
@@ -866,6 +866,8 @@ sum.edna <- summary(post.edna$beta.samples)
 edna.summary <- as.data.frame(cbind(sum.edna$statistics[,c(1:2)], exp(sum.edna$statistics[,c(1:2)])))
 colnames(edna.summary) <- c("Mean", "SD", "Odds-ratio mean", "Exp SD")
 
+plogis(sum.edna$statistics["(Intercept)",c("Mean", "SD")])
+
 kable(edna.summary, row.names = T, caption = "eDNA detection probabilites") %>%
      column_spec (1:5, border_left = T, border_right = T) %>% 
      kable_styling()
@@ -873,6 +875,9 @@ kable(edna.summary, row.names = T, caption = "eDNA detection probabilites") %>%
 sum.seine <- summary(post.seine$beta.samples)
 seine.summary <- as.data.frame(cbind(sum.seine$statistics[,c(1:2)], exp(sum.seine$statistics[,c(1:2)])))
 colnames(seine.summary) <- c("Mean", "SD", "Odds-ratio mean", "Exp SD")
+
+plogis(sum.seine$statistics["(Intercept)", c("Mean", "SD")])
+
 kable(seine.summary, row.names = T, caption = "Beach seine detection probabilites") %>%
      column_spec (1:5, border_left = T, border_right = T) %>% 
      kable_styling()
