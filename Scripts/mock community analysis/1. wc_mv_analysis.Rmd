@@ -566,6 +566,19 @@ binary.wide <- long %>%
               values_from = binary) %>%
   column_to_rownames(var = "bay_year")
 
+binary.long <- long %>%
+  mutate(binary = ifelse(value <= 0, 0, 1)) #%>%
+  # pivot_wider(id_cols = -c(bay_year2:year, value), names_from = name,
+  #             values_from = binary) %>%
+  # column_to_rownames(var = "bay_year")
+
+# how many unique species sampled in each habitat/gear
+binary.long %>%
+  filter(binary > 0) %>%
+  dplyr::distinct(name, intx, binary) %>%
+  group_by(intx) %>%
+  dplyr::summarize(num = n())
+  
 
 # I dont believe we need to standardize binary data before calculating jaccard dissimilarity
 jacc.wide <- vegdist(binary.wide, method = "jaccard", binary = T)
@@ -1702,12 +1715,12 @@ sp.accum <- df %>%
   #                         ifelse(habitat == "kelp", "Understory kelp",
   #                                ifelse(habitat == "mixed", "Mixed eelgrass", habitat))))
 
-sp.accum %>%
+acc.hab.plot <- sp.accum %>%
   #filter(habitat == "Eelgrass") %>%
   ggplot() +
-  geom_line(aes(x = sites, y = richness, linetype = intx)) +
   geom_ribbon(aes(ymin = richness - sd, ymax = richness + sd, x = sites,
-                  fill = intx), alpha = 0.3) +
+                  fill = intx, alpha = intx, alpha = intx)) +
+  geom_line(aes(x = sites, y = richness, linetype = intx), linewidth = 1.2) +
   scale_fill_manual(name = "Gear & Habitat type",
                      labels = c("Eelgrass eDNA", "Eelgrass seine",
                                 "Understory kelp eDNA","Understory kelp seine",
@@ -1715,6 +1728,13 @@ sp.accum %>%
                      values = c("#327610", "#327610",
                                 "#E4572E", "#E4572E",
                                 "#E1AD01", "#E1AD01")) +
+  scale_alpha_manual(name = "Gear & Habitat type",
+                     labels = c("Eelgrass eDNA", "Eelgrass seine",
+                                "Understory kelp eDNA","Understory kelp seine",
+                                "Mixed eelgrass eDNA", "Mixed eelgrass seine"),
+                     values = c(0.3, 1,
+                                0.3, 1,
+                                0.3, 1)) +
   # scale_fill_manual(name = "Habitat",
   #                    labels = c("Eelgrass", "Understory kelp", "Mixed eelgrass"),
   #                    values = c("#327610", "#E4572E", "#E1AD01")) +
@@ -1727,7 +1747,13 @@ sp.accum %>%
                                 "solid", "dashed")) +
   labs(x = "Number of Sites", y = "Species richness") +
   plot_theme() +
+  theme(legend.key.size = unit(2, "line"),
+        strip.text = element_text(size = 22),
+        axis.title = element_text(size = 22)) +
+  #guides(linetype = guide_legend(override.aes = list(size = 1))) +
   facet_wrap(~habitat)
+
+#ggsave("Images/species_accumulation_habitat.png", height = 7, width = 16)
 ```
 
 ```{r}
