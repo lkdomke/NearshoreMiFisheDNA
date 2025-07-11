@@ -294,7 +294,9 @@ seine.corrected2 <- seine %>% # first fix the unflat, unscul, unrock species wit
   # dplyr::select(-c(bay_year, bay_id, habitat, fork_length, mass_g, abundance, type)) %>%
   # distinct() %>%
   mutate(corrected_sp = ifelse(is.na(taxon), species_scientific, taxon)) 
-seine.corrected<- seine.corrected2 %>%
+
+# seperate it out so i can have seine.corrected2 w/o rel abundance
+seine.corrected <- seine.corrected2 %>%
   group_by(bay_year, habitat, corrected_sp, type) %>%
   dplyr::summarise(value = sum(abundance)) %>%
   mutate(bay_year2 = bay_year) %>%
@@ -327,12 +329,35 @@ comb <- rbind(edna.corrected, seine.corrected) %>%
                                                    "Hemilepidotus sp."), "Hemilepidotus spp.",
                                corrected_sp)) %>%
   group_by(bay_year, bay_year2, corrected_sp, type, habitat) %>%
-  dplyr::summarize(value = sum(value)) %>%
+  dplyr::summarize(value = sum(value)) %>% # summarize the grouped species (artedius & hem)
   left_join(site.info, by = c("bay_year", "bay_year2", "type")) %>%
   mutate(habitat = habitat.y) %>%
   pivot_wider(id_cols = c(bay_year, bay_year2, type, habitat, place_name, date, julian,
                           latitude, longitude, year), names_from = corrected_sp, values_from = value,
               values_fill = 0, values_fn = sum)
+
+
+# join together the eDNA and the abundance seine corrected2
+dang.comb <- seine.corrected2 %>%
+    group_by(bay_year, habitat, corrected_sp, type) %>%
+  dplyr::summarise(value = sum(abundance)) %>%
+  mutate(bay_year2 = bay_year) %>%
+  dplyr::select(colnames(edna.corrected)) %>%
+  rbind(edna.corrected) %>% # so we're adding in enda.corrected which is rel abundance and seine is absolute abundance so just be careful using this
+  mutate(corrected_sp = ifelse(corrected_sp %in% c("Artedius fenestralis", 
+                                                   "Artedius harringtoni",
+                                                   "Artedius lateralis", 
+                                                   "Artedius spp."), 
+                               "Artedius spp.", corrected_sp),
+         corrected_sp = ifelse(corrected_sp %in% c("Hemilepidotus hemilepidotus",
+                                                   "Hemilepidotus spinosus",
+                                                   "Hemilepidotus sp."), 
+                               "Hemilepidotus spp.", corrected_sp)) %>%
+  group_by(bay_year, bay_year2, corrected_sp, type, habitat) %>%
+  dplyr::summarize(value = sum(value)) %>% # summarize the grouped species (artedius & hem)
+  left_join(site.info, by = c("bay_year", "bay_year2", "type")) %>%
+  mutate(habitat = habitat.y) %>%
+  dplyr::select(bay_year:type, value, place_name:habitat)
 ```
 
 
@@ -2030,8 +2055,8 @@ nested <- data.frame(nested = c("eDNA", "eDNA", "eDNA", "Seine", "Seine", "Seine
                       "eDNA", "eDNA","Both gears", "eDNA", "Both gears", "Both gears",
                       "Seine","Seine", "Seine", "eDNA", "Seine"))
 
-comb <- as.data.frame(indic$comb)
-combinations <- as.data.frame(colnames(comb)) %>%
+comb.isa <- as.data.frame(indic$comb)
+combinations <- as.data.frame(colnames(comb.isa)) %>%
   rownames_to_column(var = "index") %>%
   mutate(index = as.integer(index)) %>%
   cbind(nested) %>%
@@ -2268,94 +2293,206 @@ isa.plot
 ```
 
 
-## ISA sp in seine w/ abund
+## ISA sp in seine/eDNA w/ abund
 ```{r}
 head(seine.corrected2)
+head(dang.comb)
 head(heatmapdat)
-seine.sp <- filter(heatmapdat, nested == "Both gears" | nested == "Seine") %>%
+isa.sp <- filter(heatmapdat, nested == "Both gears" | nested == "Seine" |
+                   nested == "eDNA") %>%
   distinct(rn)
 
-# create a few groups for 
-s.eel <- seine.corrected2 %>%
-  filter(corrected_sp %in% seine.sp$rn,
+
+# create a few groups for each
+s.eel <- dang.comb %>%
+  filter(corrected_sp %in% isa.sp$rn,
          type == "seine", 
          habitat == "eelgrass") %>%
   group_by(corrected_sp, habitat) %>%
-  dplyr::summarize(sum = sum(abundance)) %>%
+  dplyr::summarize(sum = sum(value)) %>%
   mutate(comb = "Seine: eelgrass")
 
-s.kelp <- seine.corrected2 %>%
-  filter(corrected_sp %in% seine.sp$rn,
+s.kelp <- dang.comb %>%
+  filter(corrected_sp %in% isa.sp$rn,
          type == "seine", 
          habitat == "kelp") %>%
   group_by(corrected_sp, habitat) %>%
-  dplyr::summarize(sum = sum(abundance)) %>%
+  dplyr::summarize(sum = sum(value)) %>%
   mutate(comb = "Seine: kelp")
 
-s.mixed <- seine.corrected2 %>%
-  filter(corrected_sp %in% seine.sp$rn,
+s.mixed <- dang.comb %>%
+  filter(corrected_sp %in% isa.sp$rn,
          type == "seine", 
          habitat == "mixed") %>%
   group_by(corrected_sp, habitat) %>%
-  dplyr::summarize(sum = sum(abundance)) %>%
+  dplyr::summarize(sum = sum(value)) %>%
   mutate(comb = "Seine: mixed")
 
-s.eelkelp <- seine.corrected2 %>%
-  filter(corrected_sp %in% seine.sp$rn,
+s.eelkelp <- dang.comb %>%
+  filter(corrected_sp %in% isa.sp$rn,
          type == "seine", 
          habitat != ("mixed")) %>%
   group_by(corrected_sp) %>%
-  dplyr::summarize(sum = sum(abundance)) %>%
+  dplyr::summarize(sum = sum(value)) %>%
   mutate(comb = "Seine: eelgrass & kelp")
 
-s.eelmixed <- seine.corrected2 %>%
-  filter(corrected_sp %in% seine.sp$rn,
+s.eelmixed <- dang.comb %>%
+  filter(corrected_sp %in% isa.sp$rn,
          type == "seine", 
          habitat != "kelp") %>%
   group_by(corrected_sp) %>%
-  dplyr::summarize(sum = sum(abundance)) %>%
+  dplyr::summarize(sum = sum(value)) %>%
   mutate(comb = "Seine: eelgrass & mixed")
 
-s.kelpmixed <- seine.corrected2 %>%
-  filter(corrected_sp %in% seine.sp$rn,
+s.kelpmixed <- dang.comb %>%
+  filter(corrected_sp %in% isa.sp$rn,
          type == "seine", 
          habitat != "eelgrass") %>%
   group_by(corrected_sp) %>%
-  dplyr::summarize(sum = sum(abundance)) %>%
+  dplyr::summarize(sum = sum(value)) %>%
   mutate(comb = "Seine: kelp & mixed")
 
-s.all <- seine.corrected2 %>%
-  filter(corrected_sp %in% seine.sp$rn,
+s.all <- dang.comb %>%
+  filter(corrected_sp %in% isa.sp$rn,
          type == "seine") %>%
   group_by(corrected_sp) %>%
-  dplyr::summarize(sum = sum(abundance)) %>%
+  dplyr::summarize(sum = sum(value)) %>%
   mutate(comb = "Seine: all habitats")
 
-abundheatdat<- rbind(s.eel, s.mixed, s.kelp, s.kelpmixed, s.eelmixed, s.all) %>%
-   mutate(comb = factor(comb, levels = c("Seine: eelgrass", "Seine: mixed", "Seine: kelp",
-                                        "Seine: eelgrass & kelp", "Seine: eelgrass & mixed",
-                                        "Seine: kelp & mixed", "Seine: all habitats")),
+## Now repeat with eDNA
+
+e.eel <- dang.comb %>%
+  filter(corrected_sp %in% isa.sp$rn,
+         type == "edna", 
+         habitat == "eelgrass") %>%
+  group_by(corrected_sp, habitat) %>%
+  dplyr::summarize(sum = sum(value)) %>%
+  mutate(comb = "eDNA: eelgrass")
+
+e.kelp <- dang.comb %>%
+  filter(corrected_sp %in% isa.sp$rn,
+         type == "edna", 
+         habitat == "kelp") %>%
+  group_by(corrected_sp, habitat) %>%
+  dplyr::summarize(sum = sum(value)) %>%
+  mutate(comb = "eDNA: kelp")
+
+e.mixed <- dang.comb %>%
+  filter(corrected_sp %in% isa.sp$rn,
+         type == "edna", 
+         habitat == "mixed") %>%
+  group_by(corrected_sp, habitat) %>%
+  dplyr::summarize(sum = sum(value)) %>%
+  mutate(comb = "eDNA: mixed")
+
+e.eelkelp <- dang.comb %>%
+  filter(corrected_sp %in% isa.sp$rn,
+         type == "edna", 
+         habitat != ("mixed")) %>%
+  group_by(corrected_sp) %>%
+  dplyr::summarize(sum = sum(value)) %>%
+  mutate(comb = "eDNA: eelgrass & kelp")
+
+e.eelmixed <- dang.comb %>%
+  filter(corrected_sp %in% isa.sp$rn,
+         type == "edna", 
+         habitat != "kelp") %>%
+  group_by(corrected_sp) %>%
+  dplyr::summarize(sum = sum(value)) %>%
+  mutate(comb = "eDNA: eelgrass & mixed")
+
+e.kelpmixed <- dang.comb %>%
+  filter(corrected_sp %in% isa.sp$rn,
+         type == "edna", 
+         habitat != "eelgrass") %>%
+  group_by(corrected_sp) %>%
+  dplyr::summarize(sum = sum(value)) %>%
+  mutate(comb = "eDNA: kelp & mixed")
+
+e.all <- dang.comb %>%
+  filter(corrected_sp %in% isa.sp$rn,
+         type == "edna") %>%
+  group_by(corrected_sp) %>%
+  dplyr::summarize(sum = sum(value)) %>%
+  mutate(comb = "eDNA: all habitats")
+
+### JOIN together the seine data
+tmp.seine.dat <- rbind(s.eel, s.mixed, s.kelp, s.kelpmixed, s.eelmixed, s.all) %>%
+  dplyr::select(-habitat) 
+
+abundheatdat <- expand_grid(isa.sp, unique(tmp.seine.dat$comb)) %>%
+  #subset(!(rn %in% tmp.seine.dat$corrected_sp)) %>%
+  dplyr::rename(corrected_sp = rn, comb = `unique(tmp.seine.dat$comb)`) %>%
+  left_join(tmp.seine.dat) %>%
+  mutate(sum = ifelse(is.na(sum), 0, sum)) %>%
+   mutate(comb = factor(comb,
+                        levels = c("Seine: eelgrass", "Seine: mixed", 
+                                   "Seine: kelp", "Seine: eelgrass & kelp", 
+                                   "Seine: eelgrass & mixed",
+                                   "Seine: kelp & mixed", "Seine: all habitats")),
           corrected_sp = factor(corrected_sp, levels = c("Artedius spp.","Hexagrammos",
                                                          "Clupea pallasii", "Lumpenus sagitta",
                                                          "Syngnathus leptorhynchus", "Cottus_Leptocottus",
-                                                         "Anoplarchus", "Sebastes 1","Aulorhynchus flavidus", 
+                                                         "Anoplarchus", "Oligocottus maculosus",
+                                                         "Sebastes 1","Aulorhynchus flavidus", 
                                                          "Hemilepidotus spp.", "Apodichthys flavidus",
                                                          "Blepsias cirrhosus", "Ophiodon elongatus",
-                                                         "Brachyistius frenatus", "Oxylebius pictus")))
+                                                         "Brachyistius frenatus","Xiphister", "Oxylebius pictus")))
+
+relabundheatdat<- rbind(e.eel, e.mixed, e.kelp, e.kelpmixed, e.eelmixed, e.all) %>%
+   mutate(comb = factor(comb, 
+                        levels = c("eDNA: eelgrass", "eDNA: mixed", 
+                                   "eDNA: kelp", "eDNA: eelgrass & kelp", 
+                                   "eDNA: eelgrass & mixed",
+                                   "eDNA: kelp & mixed", "eDNA: all habitats")),
+          corrected_sp = factor(corrected_sp, levels = c("Artedius spp.","Hexagrammos",
+                                                         "Clupea pallasii", "Lumpenus sagitta",
+                                                         "Syngnathus leptorhynchus", "Cottus_Leptocottus",
+                                                         "Anoplarchus", "Oligocottus maculosus",
+                                                         "Sebastes 1","Aulorhynchus flavidus", 
+                                                         "Hemilepidotus spp.", "Apodichthys flavidus",
+                                                         "Blepsias cirrhosus", "Ophiodon elongatus",
+                                                         "Brachyistius frenatus","Xiphister", "Oxylebius pictus")))
 
 
-
-ggplot() +
+seine <- ggplot() +
    geom_tile(data = abundheatdat,
             aes(x = as.factor(comb), y = corrected_sp, fill = log(sum))) +
   scale_fill_continuous(type = "viridis") +
   plot_theme() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 20),
+        axis.text.y = element_text(size = 20),
+        legend.position = "top",
+        axis.title = element_text(size = 22)) +
   labs(x = "Gear type & Habitat combinations",
        y = "Species", fill = "Log(total abundance)") +
   guides(color = "none",
-         fill = guide_colourbar(barheight = 10,
-                                barwidth = 1.5))
+         fill = guide_colourbar(barheight = 1.5,
+                                barwidth = 10,
+                                nrow = 1))
+
+edna <- ggplot() +
+   geom_tile(data = relabundheatdat,
+            aes(x = as.factor(comb), y = corrected_sp, fill = log(sum))) +
+  viridis::scale_fill_viridis(option = "inferno") +
+  plot_theme() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 20),
+        axis.text.y = element_text(size = 20),
+        legend.position = "top",
+        axis.title = element_text(size = 22)) +
+  labs(x = "Gear type & Habitat combinations",
+       y = "Species", fill = "Log(relative abundance)") +
+  guides(color = "none",
+         fill = guide_colourbar(
+                                barheight = 1.5,
+                                barwidth = 10,
+                                nrow = 1))
+
+raw.isa.plot <- edna + seine + 
+  plot_layout(axes = "collect") +
+  plot_annotation(tag_levels = "a")
+
+ggsave("Images/Abund&RelAbund_ISAsp.png", width = 14, height = 8, plot = raw.isa.plot)
 ```
 
 
