@@ -2060,7 +2060,7 @@ combinations <- as.data.frame(colnames(comb.isa)) %>%
   rownames_to_column(var = "index") %>%
   mutate(index = as.integer(index)) %>%
   cbind(nested) %>%
-  dplyr::rename(comb = "colnames(comb)") # this has indexed the combinations that got included and are represented as indexes in inidic.sign below. 
+  dplyr::rename(comb = "colnames(comb.isa)") # this has indexed the combinations that got included and are represented as indexes in inidic.sign below. 
 
 # one caveat about this (see help documentation) is t hat because we're using combinations (not the classical ISA) I **think** we need to account for type I error 
 library(data.table)
@@ -2309,7 +2309,7 @@ s.eel <- dang.comb %>%
          type == "seine", 
          habitat == "eelgrass") %>%
   group_by(corrected_sp, habitat) %>%
-  dplyr::summarize(sum = sum(value)) %>%
+  dplyr::summarize(avg = mean(value)) %>%
   mutate(comb = "Seine: eelgrass")
 
 s.kelp <- dang.comb %>%
@@ -2317,7 +2317,7 @@ s.kelp <- dang.comb %>%
          type == "seine", 
          habitat == "kelp") %>%
   group_by(corrected_sp, habitat) %>%
-  dplyr::summarize(sum = sum(value)) %>%
+  dplyr::summarize(avg = mean(value)) %>%
   mutate(comb = "Seine: kelp")
 
 s.mixed <- dang.comb %>%
@@ -2325,7 +2325,7 @@ s.mixed <- dang.comb %>%
          type == "seine", 
          habitat == "mixed") %>%
   group_by(corrected_sp, habitat) %>%
-  dplyr::summarize(sum = sum(value)) %>%
+  dplyr::summarize(avg = mean(value)) %>%
   mutate(comb = "Seine: mixed")
 
 s.eelkelp <- dang.comb %>%
@@ -2333,7 +2333,7 @@ s.eelkelp <- dang.comb %>%
          type == "seine", 
          habitat != ("mixed")) %>%
   group_by(corrected_sp) %>%
-  dplyr::summarize(sum = sum(value)) %>%
+  dplyr::summarize(avg = mean(value)) %>%
   mutate(comb = "Seine: eelgrass & kelp")
 
 s.eelmixed <- dang.comb %>%
@@ -2341,7 +2341,7 @@ s.eelmixed <- dang.comb %>%
          type == "seine", 
          habitat != "kelp") %>%
   group_by(corrected_sp) %>%
-  dplyr::summarize(sum = sum(value)) %>%
+  dplyr::summarize(avg = mean(value)) %>%
   mutate(comb = "Seine: eelgrass & mixed")
 
 s.kelpmixed <- dang.comb %>%
@@ -2349,24 +2349,24 @@ s.kelpmixed <- dang.comb %>%
          type == "seine", 
          habitat != "eelgrass") %>%
   group_by(corrected_sp) %>%
-  dplyr::summarize(sum = sum(value)) %>%
+  dplyr::summarize(avg = mean(value)) %>%
   mutate(comb = "Seine: kelp & mixed")
 
 s.all <- dang.comb %>%
   filter(corrected_sp %in% isa.sp$rn,
          type == "seine") %>%
   group_by(corrected_sp) %>%
-  dplyr::summarize(sum = sum(value)) %>%
+  dplyr::summarize(avg = mean(value)) %>%
   mutate(comb = "Seine: all habitats")
 
-## Now repeat with eDNA
+## Now repeat with eDNA, but we're going to average rather than sum relative abund
 
 e.eel <- dang.comb %>%
   filter(corrected_sp %in% isa.sp$rn,
          type == "edna", 
          habitat == "eelgrass") %>%
   group_by(corrected_sp, habitat) %>%
-  dplyr::summarize(sum = sum(value)) %>%
+  dplyr::summarize(avg = mean(value)) %>%
   mutate(comb = "eDNA: eelgrass")
 
 e.kelp <- dang.comb %>%
@@ -2374,7 +2374,7 @@ e.kelp <- dang.comb %>%
          type == "edna", 
          habitat == "kelp") %>%
   group_by(corrected_sp, habitat) %>%
-  dplyr::summarize(sum = sum(value)) %>%
+  dplyr::summarize(avg = mean(value)) %>%
   mutate(comb = "eDNA: kelp")
 
 e.mixed <- dang.comb %>%
@@ -2382,7 +2382,7 @@ e.mixed <- dang.comb %>%
          type == "edna", 
          habitat == "mixed") %>%
   group_by(corrected_sp, habitat) %>%
-  dplyr::summarize(sum = sum(value)) %>%
+  dplyr::summarize(avg = mean(value)) %>%
   mutate(comb = "eDNA: mixed")
 
 e.eelkelp <- dang.comb %>%
@@ -2390,7 +2390,7 @@ e.eelkelp <- dang.comb %>%
          type == "edna", 
          habitat != ("mixed")) %>%
   group_by(corrected_sp) %>%
-  dplyr::summarize(sum = sum(value)) %>%
+  dplyr::summarize(avg = mean(value)) %>%
   mutate(comb = "eDNA: eelgrass & kelp")
 
 e.eelmixed <- dang.comb %>%
@@ -2398,7 +2398,7 @@ e.eelmixed <- dang.comb %>%
          type == "edna", 
          habitat != "kelp") %>%
   group_by(corrected_sp) %>%
-  dplyr::summarize(sum = sum(value)) %>%
+  dplyr::summarize(avg = mean(value)) %>%
   mutate(comb = "eDNA: eelgrass & mixed")
 
 e.kelpmixed <- dang.comb %>%
@@ -2406,25 +2406,26 @@ e.kelpmixed <- dang.comb %>%
          type == "edna", 
          habitat != "eelgrass") %>%
   group_by(corrected_sp) %>%
-  dplyr::summarize(sum = sum(value)) %>%
+  dplyr::summarize(avg = mean(value)) %>%
   mutate(comb = "eDNA: kelp & mixed")
 
 e.all <- dang.comb %>%
   filter(corrected_sp %in% isa.sp$rn,
          type == "edna") %>%
   group_by(corrected_sp) %>%
-  dplyr::summarize(sum = sum(value)) %>%
+  dplyr::summarize(avg = mean(value)) %>%
   mutate(comb = "eDNA: all habitats")
 
 ### JOIN together the seine data
 tmp.seine.dat <- rbind(s.eel, s.mixed, s.kelp, s.kelpmixed, s.eelmixed, s.all) %>%
   dplyr::select(-habitat) 
 
+# seine data heat map
 abundheatdat <- expand_grid(isa.sp, unique(tmp.seine.dat$comb)) %>%
   #subset(!(rn %in% tmp.seine.dat$corrected_sp)) %>%
   dplyr::rename(corrected_sp = rn, comb = `unique(tmp.seine.dat$comb)`) %>%
   left_join(tmp.seine.dat) %>%
-  mutate(sum = ifelse(is.na(sum), 0, sum)) %>%
+  mutate(sum = ifelse(is.na(avg), 0, avg)) %>%
    mutate(comb = factor(comb,
                         levels = c("Seine: eelgrass", "Seine: mixed", 
                                    "Seine: kelp", "Seine: eelgrass & kelp", 
@@ -2457,15 +2458,15 @@ relabundheatdat<- rbind(e.eel, e.mixed, e.kelp, e.kelpmixed, e.eelmixed, e.all) 
 
 seine <- ggplot() +
    geom_tile(data = abundheatdat,
-            aes(x = as.factor(comb), y = corrected_sp, fill = log(sum))) +
+            aes(x = as.factor(comb), y = corrected_sp, fill = log(avg))) +
   scale_fill_continuous(type = "viridis") +
   plot_theme() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 20),
-        axis.text.y = element_text(size = 20),
+        axis.text.y = element_text(size = 20, face = "italic"),
         legend.position = "top",
         axis.title = element_text(size = 22)) +
   labs(x = "Gear type & Habitat combinations",
-       y = "Species", fill = "Log(total abundance)") +
+       y = "Species", fill = "Log(mean abundance)") +
   guides(color = "none",
          fill = guide_colourbar(barheight = 1.5,
                                 barwidth = 10,
@@ -2473,15 +2474,15 @@ seine <- ggplot() +
 
 edna <- ggplot() +
    geom_tile(data = relabundheatdat,
-            aes(x = as.factor(comb), y = corrected_sp, fill = log(sum))) +
+            aes(x = as.factor(comb), y = corrected_sp, fill = log(avg))) +
   viridis::scale_fill_viridis(option = "inferno") +
   plot_theme() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 20),
-        axis.text.y = element_text(size = 20),
+        axis.text.y = element_text(size = 20, face = "italic"),
         legend.position = "top",
         axis.title = element_text(size = 22)) +
   labs(x = "Gear type & Habitat combinations",
-       y = "Species", fill = "Log(relative abundance)") +
+       y = "Species", fill = "Log(mean relative abundance)") +
   guides(color = "none",
          fill = guide_colourbar(
                                 barheight = 1.5,
@@ -2492,7 +2493,7 @@ raw.isa.plot <- edna + seine +
   plot_layout(axes = "collect") +
   plot_annotation(tag_levels = "a")
 
-ggsave("Images/Abund&RelAbund_ISAsp.png", width = 14, height = 8, plot = raw.isa.plot)
+#ggsave("Images/Abund&RelAbund_ISAsp.png", width = 14, height = 8, plot = raw.isa.plot)
 ```
 
 
