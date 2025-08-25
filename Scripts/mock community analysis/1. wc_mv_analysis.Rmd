@@ -338,6 +338,8 @@ comb <- rbind(edna.corrected, seine.corrected) %>%
 
 
 # join together the eDNA and the abundance seine corrected2
+# this is "dang.comb" because it has two different abundance measurements
+# for beach seines its absolute abundance and eDNA its relative abundance
 dang.comb <- seine.corrected2 %>%
     group_by(bay_year, habitat, corrected_sp, type) %>%
   dplyr::summarise(value = sum(abundance)) %>%
@@ -502,7 +504,7 @@ nonz.seine <- as.data.frame(x = colSums(seine.all[,-c(1:11)]) == 0) %>%
     filter(TF == "FALSE") %>%
     rownames_to_column(var = "sp")
 
-seine <- filter(long, type == "seine") %>%
+seine_wide <- filter(long, type == "seine") %>%
   subset(name %in% unique(nonz.seine$sp)) %>%
   pivot_wider(names_from = "name", values_from = "value") %>%
   column_to_rownames(var = "bay_year") %>%
@@ -512,6 +514,8 @@ seine <- filter(long, type == "seine") %>%
 anti_join(site.info2, comb, by = "bay_year")
 anti_join(comb, site.info2, by = "bay_year")
 
+anti_join(nonz.seine, nonz.edna)
+anti_join(nonz.edna, nonz.seine)
 
 ## read out out wide data frame for use in the wc_uni_analysis script
 # write.csv(wide, "Data/combined_gears_wcomm-4-2-25.csv")
@@ -525,6 +529,10 @@ pull out species names
 ```{r}
 sp <- long %>%
   distinct(name)
+
+filter(long, name == "Hypomesus" & value > 0)
+filter(wide, Hypomesus > 0)
+filter(wide, `Hippoglossus stenolepis` > 0)
 
 eel.sp <- eelg %>%
   rownames_to_column(var = "bay_year") %>%
@@ -562,7 +570,7 @@ std.eelg.mixed <- wisconsin(eelg.mixed)
 std.traits <- wisconsin(traits)
 
 std.edna <- wisconsin(edna)
-std.seine <- wisconsin(seine)
+std.seine <- wisconsin(seine_wide)
 ```
 
 # disimilarity metrics
@@ -2456,7 +2464,7 @@ relabundheatdat<- rbind(e.eel, e.mixed, e.kelp, e.kelpmixed, e.eelmixed, e.all) 
                                                          "Brachyistius frenatus","Xiphister", "Oxylebius pictus")))
 
 
-seine <- ggplot() +
+seine.plot <- ggplot() +
    geom_tile(data = abundheatdat,
             aes(x = as.factor(comb), y = corrected_sp, fill = log(avg))) +
   scale_fill_continuous(type = "viridis") +
@@ -2472,7 +2480,7 @@ seine <- ggplot() +
                                 barwidth = 10,
                                 nrow = 1))
 
-edna <- ggplot() +
+edna.plot <- ggplot() +
    geom_tile(data = relabundheatdat,
             aes(x = as.factor(comb), y = corrected_sp, fill = log(avg))) +
   viridis::scale_fill_viridis(option = "inferno") +
@@ -2489,7 +2497,7 @@ edna <- ggplot() +
                                 barwidth = 10,
                                 nrow = 1))
 
-raw.isa.plot <- edna + seine + 
+raw.isa.plot <- edna.plot + seine.plot + 
   plot_layout(axes = "collect") +
   plot_annotation(tag_levels = "a")
 
@@ -2838,5 +2846,83 @@ detection_ind_sp <- avg_pres_gear %>%
 detection_ind_sp  
 ```
 
+# Primer mismatch check
+```{r}
+# this has absolute abundance for beach seines and relative abundance for eDNA
+# should only be used and interpreted with extreme caution. 
+head(dang.comb)
 
+# these are the species with the primer mismatch
+# agonopsis -northern spearnose poacher (solitary, demersal, plates), 
+# surf smelt (which we group to Hypomesus; obligatory schooling, pelagic scales), 
+# capelin (obligatory schooling, pelagic, scales), 
+# CO sole (solitary demersal scales), 
+# sturgeon poacher (solitary demersal plates)
+mismatch.sp <- c("Agonopsis vulsa", "Hypomesus", "Mallotus villosus", "Pleuronichthys coenosus", 
+                 "Podothecus accipenserinus")
+
+subset(dang.comb, corrected_sp %in% mismatch.sp) %>%
+  ungroup() %>%
+  ggplot() +
+  geom_col(aes(x = type, y = value, fill = bay_year2)) +
+  facet_wrap(~corrected_sp + type, scales = "free") +
+  theme(legend.position = "none") 
+
+dang.comb %>%
+  filter(corrected_sp %in% c("Mallotus villosus", "Podothecus accipenserinus"),
+         value > 0)
+
+# okay this isn't super helpful, but it does tell us that Agonopsis vulsa is only detected with eDNA and only at one site. 
+#' That Mallotus villosus is only detected with seine at approximately two sites
+#' That CO sole, Pleuronichthys coenosus is detected with both seine and eDNA
+#' Podothecus (sturgeon poacher) is detected with both; but only at one eDNA site, multiple seines
+#' Now lets try with both relative abundance
+
+head(std.wide) # relative abundance standardized with wisconsin double standardization
+std.wide %>%
+  dplyr::select(any_of(mismatch.sp)) %>%
+  rownames_to_column("bay_year") %>%
+  left_join(site.info2) %>%
+  pivot_longer(cols = c(`Agonopsis vulsa`, `Mallotus villosus`, `Pleuronichthys coenosus`,
+                        `Podothecus accipenserinus`, `Hypomesus`), values_to = "value", names_to = "corrected_sp") %>%
+  ggplot() +
+  geom_col(aes(x = type, y = value, fill = bay_year2)) +
+  facet_wrap(~corrected_sp, scales = "free")
+
+test <- std.wide %>%
+  dplyr::select(any_of(mismatch.sp)) %>%
+  rownames_to_column("bay_year") %>%
+  left_join(site.info2) %>%
+  pivot_longer(cols = c(`Agonopsis vulsa`, `Mallotus villosus`, `Pleuronichthys coenosus`,
+                        `Podothecus accipenserinus`, `Hypomesus`), values_to = "value", names_to = "corrected_sp") %>%
+  pivot_wider(names_from = type, values_from = value, values_fill = 0) %>%
+  group_by(corrected_sp) %>%
+  filter(seine > 0 )
+  
+```
+
+```{r}
+#' quick look at cottus leptocottus and if the abundance values jive with them being more associated with eelgrass than mixed or kelp
+
+head(seine.corrected2)
+n <- c(17, 7, 11)
+
+seine.corrected2 %>%
+  pivot_wider(id_cols = c(bay_year, bay_id, habitat), names_from = corrected_sp, 
+              values_from = abundance, values_fill = 0, values_fn = sum) %>%
+  dplyr::select(c(bay_year, bay_id, habitat, `Cottus_Leptocottus`)) %>%
+  pivot_longer(cols = `Cottus_Leptocottus`, values_to = "abund", names_to = "corrected_sp") %>%
+  group_by(habitat, corrected_sp) %>%
+  dplyr::summarize(avg = mean(abund),
+                   sd = sd(abund)) %>%
+  cbind(n) %>%  # n is 17 eelgrass sites, 7 kelp, 11 mixed
+  dplyr::rename(n = "...5") %>%
+  mutate(se = sd/sqrt(n)) %>%
+  ggplot() +
+  geom_col(aes(x = habitat, y = avg)) +
+  geom_errorbar(aes(x = habitat, ymin = avg - se, ymax = avg + se), width = 0.2) +
+  labs(x = "habitat", y = "avg +/- se")
+
+
+```
 
