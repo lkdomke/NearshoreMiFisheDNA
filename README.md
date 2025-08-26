@@ -4,7 +4,7 @@ Repository contains data analyses for manuscript in prep using data collected in
 This repo uses seine and environmental DNA data. eDNA data were generated from kjledger's [nearshore_eDNA repo](https://github.com/kjledger-NOAA/nearshore_eDNA)
 and then pulled into this repo for a combined analysis. 
 
-## Script description
+## Scripts in repo
 
 ### 1. wholecomm_mv_analysis.rmd
 
