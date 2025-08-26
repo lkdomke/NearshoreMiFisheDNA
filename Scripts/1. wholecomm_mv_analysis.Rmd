@@ -1,0 +1,1231 @@
+---
+title: "1. wholecomm_mv_analysis"
+output: html_document
+date: "2025-01-24"
+editor_options: 
+  chunk_output_type: console
+---
+
+**Abundance only mulitvariate approach**
+
+This is a script adapted from the 'mv_edna_seine_exploration.rmd' that takes the same approach:
+
+- clean data and combine eDNA and seine into a single dataframe
+
+- perform wisconsin standardization
+
+- calculate dissimilarity metrics (previously we did both binary and abundance-based metrics, but we think there's some flaws with transforming the abundance data to binary - mainly it creates more within group dispersion than is allowable to perform PERMANOVAs likely because we think its inflating the influence of rare species)
+
+- test permanova for difference in groups (habitat x gear)
+
+  - follow up with any pairwise testing as appropriate
+  
+- visualize the difference (likely best done with pcoa)
+
+- indicator species analysis (ISA) to look at "identifying species that can be used as indicators of certain site groups" which is an associated between a species and site group. Often this ends up being that a species shows up in most of 100% of the sites (or combination of sites) that belong to a group. 
+
+**Addition data review steps:**
+
+- create nice indicator plots w/ abundance data included
+
+- 
+
+# library
+```{r}
+library(tidyverse)
+library(lubridate)
+library(ggrepel)
+library(patchwork)
+library(ggforce)
+library(vegan)
+extrafont::loadfonts(device="win")
+```
+
+# custom fxn
+```{r theme settings, include=FALSE}
+# Creates custom base plot theme that can adjust every graph that you use plot_theme for!
+
+plot_theme <- function() {
+  theme_bw(base_size = 20, base_family = "Calibri") %+replace%
+    theme(panel.background  = element_blank(),
+            plot.background = element_rect(fill="white", colour=NA), 
+            legend.background = element_rect(fill="transparent", colour=NA),
+            legend.key = element_rect(fill="transparent", colour=NA),
+            panel.grid.major = element_blank(), 
+            panel.grid.minor = element_blank(),
+            strip.background = element_rect(colour = "NA", fill = "grey96"))
+}
+
+# to use ggsave and export plots include argument 'device=cario_pdf' e.g.: 
+# ggsave("name.pdf", device=cairo_pdf, width = 6, height = 6)
+
+```
+
+# mock community data & cleanup
+```{r}
+# pull data from Kim's repository that we cloned and placed on our desktop - so if Kim makes any updates to the quant model that was used to generate these data them we need to pull it again
+edna <- read.csv("../nearshore_eDNA/outputs/samples_w_mocks_updated/field_quant/qm_results_20241125.csv") %>%
+  dplyr::select(-c(X, comm_idx:mock1.97.5, raw.2.5:raw.97.5, SP)) %>%
+  mutate(Species = ifelse(Species == "zRefSpecies_Clupea pallasii", "Clupea pallasii", Species),
+         type = "edna") %>%
+  unite("bay_year", c(bay_id, collection_year))
+# for now we're going to focus on the simple.Mean column which is the  mean at the field replicate (bottle) level that averages the technical (PCR) replicates. 
+
+
+# for the beach seine data, we want to pull both the beach seine abundance and biomass data for 2021 and 2022. 
+seine <- read.csv("Data/seine_biomass_at_edna_sites.csv") %>%
+  dplyr::select(c(bay_year, bay_id, habitat, sp_code, species_common, species_scientific, 
+                  fork_length, mass_g, abundance)) %>%
+  mutate(type = "seine")
+
+# bring in life history characteristics that Jessica put together
+lhs <- read.csv("Data/NearshoreLHSCharacteristics.csv") %>% # clean up a couple sp names
+  mutate(Scientific.name = str_trim(Scientific.name, side = "right")) %>%
+  mutate(Scientific.name = ifelse(Scientific.name == "Apodicthys flavidus",
+                                  "Apodichthys flavidus", Scientific.name)) %>%
+  mutate(Pelagic.Demersal = str_trim(Pelagic.Demersal, side = "right")) %>% # trim whitespace
+  dplyr::rename("name" = Scientific.name, # rename columns to be easier to code
+                "common" = Common.name,
+                "schooling" = Schooling.,
+                "water_hab" = Pelagic.Demersal,
+                "scale" = Scale.Type)
+
+anti_join(edna, seine, by = c("bay_year" = "bay_year")) %>%
+  distinct(alternative_ID, bay_year, habitat, type) # so there are four sites that have eDNA and no seine data
+```
+
+Subset data cleanup
+```{r}
+# subset mock community eDNA to just the sites that had both eDNA and seine data - this is removing the sites that had just eDNA
+edna.red <- filter(edna, !(bay_year %in% c("KLWA_A_2021", "BTRB_A_2021", "CLAM_A_2021", "NFEI_B_2021")))
+
+edna.wide <- edna.red %>%
+  dplyr::select(alternative_ID, habitat, type, Species, raw.mean, bay_year) %>%
+  distinct() %>%
+  dplyr::rename(bay_year2 = bay_year, 
+                bay_year = alternative_ID) %>%
+  pivot_wider(., names_from = "Species", 
+              values_from = raw.mean, 
+              values_fn = function(x) sum(x, na.rm = T), 
+              values_fill = 0) %>%
+  mutate_if(is.numeric, ~replace(., is.na(.), 0))
+
+seine.info <- read.csv("Data/seine_biomass_at_edna_sites.csv") %>%
+  dplyr::select(c(bay_year, place_name, habitat, date, julian, latitude, longitude)) %>%
+  distinct() %>%
+  mutate(type = "seine",
+         bay_year2 = bay_year) %>% #
+  mutate(habitat = ifelse(bay_year == "BLAQ_A_2022", "mixed", habitat),
+         habitat = ifelse(bay_year == "TAHB_A_2021", "mixed", habitat),
+         habitat = ifelse(bay_year == "SFEI_A_2022", "eelgrass", habitat))
+
+edna.info <- edna.wide %>%
+  dplyr::select(c(bay_year, bay_year2, habitat, type)) %>%
+  left_join(seine.info[c("bay_year", "place_name", "date", "julian", "latitude", "longitude")],
+            by = c("bay_year2" = "bay_year"))
+
+site.info <- edna.info %>%
+  #dplyr::select(-bay_year2) %>%
+  rbind(seine.info) %>%
+  mutate(date = mdy(date),
+         year = year(date)) 
+
+
+```
+
+# WHOLE COMMUNITY
+## Remove extra df
+```{r}
+rm(list = ls()[!ls() %in% c("edna.red", "seine", "site.info", "plot_theme", "lhs")])
+```
+
+# combine eDNA & seine data
+```{r}
+# pull the eDNA code with associated alternative ID and bay_year identification
+edna.join <- edna.red %>% # this has the sites removed that don't have associated seine samples
+  dplyr::select(community, alternative_ID, bay_year, habitat) %>%
+  distinct() # 102 total samples- matches our site.info for edna
+
+edna.com <- read.csv("Data/all_taxa_simple_20250110.csv") %>%
+  filter(bottle %in% unique(edna.join$community)) %>%
+  dplyr::select(c(bottle, taxon, simple.mean, simple.SD)) %>%
+  left_join(edna.join, by = c("bottle" = "community")) %>%
+  dplyr::select(c(taxon, simple.mean, simple.SD, alternative_ID, bay_year, habitat))
+
+taxongrp <- read.csv("Data/taxonomy_groups_20250110.csv") %>% # needs a couple changes to make the left_join adjustments work. Oncorhynchus and Leptocottus armatus species has more than one join so need to get rid of the species level 
+  filter(!(taxon %in% c("Oncorhynchus kisutch","Oncorhynchus gorbuscha", 
+                        "Oncorhynchus keta", "Oncorhynchus mykiss", 
+                        "Oncorhynchus nerka", "Leptocottus armatus",
+                        "Sebastes nigrocinctus"))) %>% # small clean up on family level
+  mutate(taxonomic_level = ifelse(taxon == "Sebastes 3", "genus", taxonomic_level)) %>%
+  dplyr::select(-X) %>%
+  distinct()
+```
+
+Use the taxongrp csv to replace species 
+
+```{r}
+head(edna.com)
+head(seine)
+
+
+edna.corrected <- left_join(edna.com, taxongrp, by = c("taxon" = "species")) %>%
+  # dplyr::select(-c(simple.N, simple.mean, simple.SD, alternative_ID, bay_year)) %>%
+  # distinct() %>%
+  mutate(corrected_sp = ifelse(is.na(taxon.y), taxon, taxon.y)) %>%
+  group_by(alternative_ID, bay_year, corrected_sp) %>%
+  dplyr::summarise(value = sum(simple.mean)) %>%
+  mutate(type = "edna",
+         bay_year2 = bay_year,
+         bay_year = alternative_ID,
+         habitat = NA) %>%
+  ungroup() %>%
+  dplyr::select(-c(alternative_ID))
+
+# before we join with the taxon there's a few species (UNFLAT, UNSCUL, AND UNROCK) that should be assigned to the most numerous species at the site they were captured
+
+############################################
+## max for sculpins at sylb_a is artedius spp.
+## max sculp kahs_a is artedius spp.
+
+## max for flatfish at REEF_A is Parophrys vetulus 
+## max for flatfish at REEF_B is Parophrys vetulus
+
+## max for rockfish at HARM_A is copper/quillback so sebastes caurinus will work cause it'll get grouped to the same sebastes match
+##############################################
+
+seine.corrected2 <- seine %>% # first fix the unflat, unscul, unrock species with max sp at the site
+  mutate(species_scientific = ifelse(sp_code == "UNFLAT", "Parophrys vetulus", species_scientific),
+         species_scientific = ifelse(sp_code == "UNSCUL", "Artedius spp.", species_scientific),
+         species_scientific = ifelse(sp_code == "UNROCK", "Sebastes caurinus", species_scientific)) %>%
+  mutate(species_scientific = ifelse(species_common == "Copperquillback juvenile rockfish", 
+                                     "Sebastes maliger", species_scientific),
+         species_scientific = ifelse(species_common == "Yellowtail/black juvenile rockfish complex",
+                                     "Sebastes flavidus", species_scientific),# this isn't 100p but we'll work when we leftjoin with taxongrp to correctly put it into the right sebastes group
+         species_scientific = ifelse(species_scientific == "Lepidopsetta spp.", "Lepidopsetta polyxystra",
+                                     species_scientific)) %>%
+  left_join(taxongrp, by = c("species_scientific" = "species")) %>%
+  # dplyr::select(-c(bay_year, bay_id, habitat, fork_length, mass_g, abundance, type)) %>%
+  # distinct() %>%
+  mutate(corrected_sp = ifelse(is.na(taxon), species_scientific, taxon)) 
+
+# seperate it out so i can have seine.corrected2 w/o rel abundance
+seine.corrected <- seine.corrected2 %>%
+  group_by(bay_year, habitat, corrected_sp, type) %>%
+  dplyr::summarise(value = sum(abundance)) %>%
+  mutate(bay_year2 = bay_year) %>%
+  group_by(bay_year, bay_year2, habitat, type) %>% # ugly code but have to change seine data to prop abund
+  mutate(total = sum(value)) %>%
+  ungroup() %>%
+  group_by(bay_year, bay_year2, habitat, type, total, corrected_sp) %>%
+  dplyr::summarize(value = sum(value)/total) %>%
+  ungroup() %>%
+  dplyr::select(-total) %>%
+  distinct()
+
+```
+
+
+next steps: 
+- group artedius spp for both beach seine and eDNA to Artedius genus level
+- group irish lord to the genus levele for both beach seine and eDNA
+
+Combine edna and seine and then group by artedius and irish lords
+```{r}
+head(edna.corrected)
+head(seine.corrected)
+
+comb <- rbind(edna.corrected, seine.corrected) %>%
+  mutate(corrected_sp = ifelse(corrected_sp %in% c("Artedius fenestralis", "Artedius harringtoni",
+                                                   "Artedius lateralis", "Artedius spp."), "Artedius spp.",
+                               corrected_sp),
+         corrected_sp = ifelse(corrected_sp %in% c("Hemilepidotus hemilepidotus", "Hemilepidotus spinosus",
+                                                   "Hemilepidotus sp."), "Hemilepidotus spp.",
+                               corrected_sp)) %>%
+  group_by(bay_year, bay_year2, corrected_sp, type, habitat) %>%
+  dplyr::summarize(value = sum(value)) %>% # summarize the grouped species (artedius & hem)
+  left_join(site.info, by = c("bay_year", "bay_year2", "type")) %>%
+  mutate(habitat = habitat.y) %>%
+  pivot_wider(id_cols = c(bay_year, bay_year2, type, habitat, place_name, date, julian,
+                          latitude, longitude, year), names_from = corrected_sp, values_from = value,
+              values_fill = 0, values_fn = sum)
+
+
+# join together the eDNA and the abundance seine corrected2
+# this is "dang.comb" because it has two different abundance measurements
+# for beach seines its absolute abundance and eDNA its relative abundance, but because we want to present the absolute and relative abundance together for Fig S6 we're going to keep this
+dang.comb <- seine.corrected2 %>%
+    group_by(bay_year, habitat, corrected_sp, type) %>%
+  dplyr::summarise(value = sum(abundance)) %>%
+  mutate(bay_year2 = bay_year) %>%
+  dplyr::select(colnames(edna.corrected)) %>%
+  rbind(edna.corrected) %>% # so we're adding in enda.corrected which is rel abundance and seine is absolute abundance so just be careful using this
+  mutate(corrected_sp = ifelse(corrected_sp %in% c("Artedius fenestralis", 
+                                                   "Artedius harringtoni",
+                                                   "Artedius lateralis", 
+                                                   "Artedius spp."), 
+                               "Artedius spp.", corrected_sp),
+         corrected_sp = ifelse(corrected_sp %in% c("Hemilepidotus hemilepidotus",
+                                                   "Hemilepidotus spinosus",
+                                                   "Hemilepidotus sp."), 
+                               "Hemilepidotus spp.", corrected_sp)) %>%
+  group_by(bay_year, bay_year2, corrected_sp, type, habitat) %>%
+  dplyr::summarize(value = sum(value)) %>% # summarize the grouped species (artedius & hem)
+  left_join(site.info, by = c("bay_year", "bay_year2", "type")) %>%
+  mutate(habitat = habitat.y) %>%
+  dplyr::select(bay_year:type, value, place_name:habitat)
+```
+
+
+# data cleaning
+## wide & long combined data
+```{r}
+site.info2 <- comb %>%
+  dplyr::select(c(bay_year, bay_year2, habitat, type, place_name,
+                  date, julian, latitude, longitude, year)) %>%
+  mutate(latitude = ifelse(bay_year2 == "MOIR_A_2021" & habitat == "eelgrass", 54.97110, latitude)) %>% # fix a typo in the latitude
+  mutate(habitat = ifelse(bay_year2 == "ROSA_A_2022", "mixed", habitat),
+         habitat = ifelse(bay_year2 == "TAHB_A_2021", "mixed", habitat),
+         habitat = ifelse(bay_year2 == "SFEI_A_2022", "eelgrass", habitat),
+         habitat = ifelse(bay_year2 == "TRIS_A_2022", "mixed", habitat)) %>%
+  unite(., col = "intx", c(habitat:type), 
+        sep = "_", remove = F) %>%
+  mutate(intx = as.factor(intx))
+
+site <- ungroup(site.info2) %>%
+  distinct(., bay_year2, type, habitat) 
+
+table(site$habitat, site$type)
+
+# clean up metadata to send out 
+# site.info2 %>%
+#   filter(type == "edna") %>%
+#   dplyr::select(c(bay_year, bay_year2, type, habitat, place_name, date, latitude, longitude)) %>%
+#   write.csv(., "Data/eDNA_site_metadata_2021-2022.csv")
+
+# Option to remove
+# eelg.site <- filter(site.info2, habitat == "eelgrass")
+# mixed.site <- filter(site.info2, habitat == "mixed")
+# kelp.site <- filter(site.info2, habitat == "kelp")
+# eelg.mixed.site <- filter(site.info2, habitat %in% c("eelgrass", "mixed"))
+# 
+# edna.site <- filter(site.info2, type == "edna")
+# seine.site <- filter(site.info2, type == "seine")
+
+wide <- comb %>%
+  column_to_rownames(var = "bay_year") %>%
+  dplyr::select(-c(bay_year2:year))
+
+long <- wide %>%
+  rownames_to_column(var = "bay_year") %>%
+  pivot_longer(cols = c("Agonopsis vulsa":"Enophrys lucasi")) %>%
+  left_join(site.info2, by = "bay_year")
+
+
+# Create a dataframe that has the abundance by species traits not species names
+traits <- long %>%
+  left_join(lhs, by = "name") %>%
+  unite(col = "traits", schooling:scale, remove = T, sep = "_") %>%
+  pivot_wider(id_cols = c(bay_year, bay_year2, intx, habitat, type, place_name, date, julian,
+                          latitude, longitude, year),
+              names_from = "traits", values_from = "value", values_fn = sum, values_fill = 0) %>%
+  column_to_rownames(var = "bay_year") %>%
+  dplyr::select(-c(bay_year2:year))
+
+# colSums(traits[,c(-c(1:11))])
+
+#### subset into non zero species for each habitat
+# EELGRASS
+eelg.all <- filter(long, habitat == "eelgrass") %>%
+  pivot_wider(names_from = "name", values_from = "value")
+  
+nonz.eelg <- as.data.frame(x = colSums(eelg.all[,-c(1:11)]) == 0) %>%
+    dplyr::rename(TF= "colSums(eelg.all[, -c(1:11)]) == 0") %>%
+    filter(TF == "FALSE") %>% # 58 sp
+    rownames_to_column(var = "sp")
+
+eelg <- filter(long, habitat == "eelgrass") %>%
+  subset(name %in% unique(nonz.eelg$sp)) %>%
+  pivot_wider(names_from = "name", values_from = "value") %>%
+  column_to_rownames(var = "bay_year") %>%
+  dplyr::select(-c(bay_year2:year))
+
+# MIXED EELGRASS
+mixed.all <- filter(long, habitat == "mixed") %>%
+  pivot_wider(names_from = "name", values_from = "value")
+  
+nonz.mixed <- as.data.frame(x = colSums(mixed.all[,-c(1:11)]) == 0) %>%
+    dplyr::rename(TF= "colSums(mixed.all[, -c(1:11)]) == 0") %>%
+    filter(TF == "FALSE") %>% # 55 sp
+    rownames_to_column(var = "sp")
+
+mixed <- filter(long, habitat == "mixed") %>%
+  subset(name %in% unique(nonz.mixed$sp)) %>%
+  pivot_wider(names_from = "name", values_from = "value") %>%
+  column_to_rownames(var = "bay_year") %>%
+  dplyr::select(-c(bay_year2:year))
+# KELP
+kelp.all <- filter(long, habitat == "kelp") %>%
+  pivot_wider(names_from = "name", values_from = "value")
+  
+nonz.kelp <- as.data.frame(x = colSums(kelp.all[,-c(1:11)]) == 0) %>%
+    dplyr::rename(TF= "colSums(kelp.all[, -c(1:11)]) == 0") %>%
+    filter(TF == "FALSE") %>%
+    rownames_to_column(var = "sp")
+
+kelp <- filter(long, habitat == "kelp") %>%
+  subset(name %in% unique(nonz.kelp$sp)) %>%
+  pivot_wider(names_from = "name", values_from = "value") %>%
+  column_to_rownames(var = "bay_year") %>%
+  dplyr::select(-c(bay_year2:year))
+
+# COMBINED EELGRASS & MIXED 
+eel.mixed.all <- filter(long, habitat %in% c("eelgrass", "mixed")) %>%
+  pivot_wider(names_from = "name", values_from = "value")
+  
+nonz.eelg.mixed <- as.data.frame(x = colSums(eel.mixed.all[,-c(1:11)]) == 0) %>%
+    dplyr::rename(TF= "colSums(eel.mixed.all[, -c(1:11)]) == 0") %>%
+    filter(TF == "FALSE") %>%
+    rownames_to_column(var = "sp") # 68 sp
+
+eelg.mixed <- filter(long, habitat %in% c("eelgrass", "mixed")) %>%
+  subset(name %in% unique(nonz.eelg.mixed$sp)) %>%
+  pivot_wider(names_from = "name", values_from = "value") %>%
+  column_to_rownames(var = "bay_year") %>%
+  dplyr::select(-c(bay_year2:year))
+
+
+#### subset into non zero for each gear type
+# eDNA
+edna.all <- filter(long, type == "edna") %>%
+  pivot_wider(names_from = "name", values_from = "value")
+  
+nonz.edna <- as.data.frame(x = colSums(edna.all[,-c(1:11)]) == 0) %>%
+    dplyr::rename(TF= "colSums(edna.all[, -c(1:11)]) == 0") %>%
+    filter(TF == "FALSE") %>%
+    rownames_to_column(var = "sp")
+
+edna <- filter(long, type == "edna") %>%
+  subset(name %in% unique(nonz.edna$sp)) %>%
+  pivot_wider(names_from = "name", values_from = "value") %>%
+  column_to_rownames(var = "bay_year") %>%
+  dplyr::select(-c(bay_year2:year))
+
+# seine
+seine.all <- filter(long, type == "seine") %>%
+  pivot_wider(names_from = "name", values_from = "value")
+  
+nonz.seine <- as.data.frame(x = colSums(seine.all[,-c(1:11)]) == 0) %>%
+    dplyr::rename(TF= "colSums(seine.all[, -c(1:11)]) == 0") %>%
+    filter(TF == "FALSE") %>%
+    rownames_to_column(var = "sp")
+
+seine_wide <- filter(long, type == "seine") %>%
+  subset(name %in% unique(nonz.seine$sp)) %>%
+  pivot_wider(names_from = "name", values_from = "value") %>%
+  column_to_rownames(var = "bay_year") %>%
+  dplyr::select(-c(bay_year2:year))
+
+
+anti_join(site.info2, comb, by = "bay_year")
+anti_join(comb, site.info2, by = "bay_year")
+
+anti_join(nonz.seine, nonz.edna)
+anti_join(nonz.edna, nonz.seine)
+
+## read out out wide data frame for use in the wc_uni_analysis script
+# write.csv(wide, "Data/combined_gears_wcomm-4-2-25.csv")
+# write.csv(site.info2, "Data/combined_metadata_4-2-25.csv")
+#write.csv(long, "Data/combined_gear_wcomm_long_4-2-25.csv")
+
+#write.csv(long, "Data/combined_gear_wcomm_extra-eDNA_5-9-25.csv")
+```
+
+pull out species names
+```{r}
+sp <- long %>%
+  distinct(name)
+
+filter(long, name == "Hypomesus" & value > 0)
+filter(wide, Hypomesus > 0)
+filter(wide, `Hippoglossus stenolepis` > 0)
+
+eel.sp <- eelg %>%
+  rownames_to_column(var = "bay_year") %>%
+  pivot_longer(cols = -c("bay_year"), names_to = "name", values_to = "value") %>%
+  distinct(name)
+
+mixed.sp <- mixed %>%
+  rownames_to_column(var = "bay_year") %>%
+  pivot_longer(cols = -c("bay_year"), names_to = "name", values_to = "value") %>%
+  distinct(name)
+
+kelp.sp <- kelp %>%
+  rownames_to_column(var = "bay_year") %>%
+  pivot_longer(cols = -c("bay_year"), names_to = "name", values_to = "value") %>%
+  distinct(name)
+
+eel.mixed.sp <- eelg.mixed %>%
+  rownames_to_column(var = "bay_year") %>%
+  pivot_longer(cols = -c("bay_year"), names_to = "name", values_to = "value") %>%
+  distinct(name)
+
+#write.csv(sp, "Data/species_name_comb.csv")
+```
+
+
+## standardization
+```{r}
+std.wide <- wisconsin(wide)
+
+# std.eelg <- wisconsin(eelg)
+# std.mixed <- wisconsin(mixed)
+# std.kelp <- wisconsin(kelp)
+# 
+# std.eelg.mixed <- wisconsin(eelg.mixed)
+std.traits <- wisconsin(traits)
+# 
+# std.edna <- wisconsin(edna)
+# std.seine <- wisconsin(seine_wide)
+```
+
+# disimilarity metrics
+## bray 
+```{r}
+bray.wide <- vegdist(std.wide, method = "bray")
+
+# bray.eelg <- vegdist(std.eelg, method = "bray")
+# bray.mixed <- vegdist(std.mixed, method = "bray")
+# bray.kelp <- vegdist(std.kelp, method = "bray")
+# 
+# bray.eelg.mixed <- vegdist(std.eelg.mixed, method = "bray")
+bray.trait <- vegdist(std.traits, method = "bray")
+# 
+# bray.edna <- vegdist(std.edna, method = "bray")
+# bray.seine <- vegdist(std.seine, method = "bray")
+```
+
+## homogeneity of dispersion
+randomization test to compare within-group 'dispersions' with any distance measure. This tells you if the differences between sites are because of dispersion or variation or if it truly driven by a difference in sites (as can be determined by a PERMANOVA test)
+
+Both betadisper tests are significant indicating significant within group dispersion. 
+This somewhat makes sense because each group contains the same sites just sampled with different methods
+```{r}
+disp.type <- betadisper(bray.wide, site.info2$type)
+anova(disp.type) 
+# H0 accepted (marginally); within group dispersion neglible 
+# pvalue = 0.16
+
+disp.hab <- betadisper(bray.wide, site.info2$habitat)
+anova(disp.hab) 
+#H0 accepted
+# pvalue = 0.16
+
+disp.year <- betadisper(bray.wide, site.info2$year)
+anova(disp.year) 
+#H0 accepted, p-value = 0.168
+
+##### TRAIT BASED STD ABUNDANCE ######
+disp.trait.type <- betadisper(bray.trait, site.info2$type)
+anova(disp.trait.type) # no within group dispersion
+
+disp.trait.hab <- betadisper(bray.trait, site.info2$habitat)
+anova(disp.trait.hab) #  no within group dispersion
+
+
+# ##### GEAR SPECIFIC BETADISPER TESTING ##########
+# edna.disp.hab <- betadisper(bray.edna, edna.site$habitat)
+# anova(edna.disp.hab)
+# 
+# seine.disp.hab <- betadisper(bray.seine, seine.site$habitat)
+# anova(seine.disp.hab)
+# # h0 reject within group dispersion
+```
+
+# permanova (Table 1)
+```{r}
+set.seed(09281992)
+# write out relevant data - going to Jeanette to compare with PRIMER
+# write.csv(std.wide, "Data/whole_comm_std_abund.csv")
+# write.csv(site.info2, "Data/whole_comm_site_info.csv")
+
+###################################
+##### ABUNDANCE BASED PERMANOVA ###
+###################################
+
+# blocks
+perm <- how(nperm = 999)
+setBlocks <- with(site.info2, bay_year2)
+adonis2(bray.wide ~ habitat * type, by = "margin", 
+        permutation = perm, data = site.info2)
+# there is a significant interaction of habitat by type (pvalue = 0.005)
+```
+
+## pairwise difference (Table S4)
+We may want to test if all groups are different from each other
+ (pairwise tests of differences among groups)
+ ‘adonis’ does not automatically test for pairwise differences, and does
+ not have an ‘ad hoc’ test to do so, hence we would have to test for
+ pairwise differences individually by selecting each pair:
+```{r}
+# for habitat by type
+
+
+# There are Multiple possible pairs (identified here via ‘combn’):
+site.info2$habitat <- as.factor(site.info2$habitat)
+site.info2$type <- as.factor(site.info2$type)
+site.info2$intx <- as.factor(site.info2$intx)
+
+# Pairwise tests:
+(pairs <- combn(levels(site.info2$intx), 2))
+
+(pairs <- pairs[,c(1,2,3,6,9,11,13,14,15)]) # we only care about a subset of these possible pairs
+# Pairwise tests: 
+p.val <- rep(NA,9)  # Set up vector to hold pairwise p-values
+for(i in 1:9) {
+  pr <- pairs[,i]
+  sub <- is.element(site.info2$intx, pr)
+  d.pair <- vegdist(std.wide[sub,], method = "bray")
+  cat("\n\nComparing", pr, ":\n")
+  print(fit <-adonis2(d.pair ~ intx, data=site.info2[sub,], perm=1999, by = "margin"))
+  p.val[i] <- fit[1,5]  # Save p-values
+  names(p.val)[i] <- paste(pr[1], "-", pr[2], sep="")
+}
+
+p.val 
+```
+
+#visualize
+
+## pcoa (Fig 4)
+```{r}
+pcoa.bray <- cmdscale(bray.trait, eig = T)
+colnames(pcoa.bray$points) <- c("pcoa1", "pcoa2")
+plot(pcoa.bray$points)
+
+percent_explained <- 100* pcoa.bray$eig/ sum(pcoa.bray$eig)
+pe <- format(round(percent_explained[1:2], digits = 1), nsmall = 1, trim = T)
+
+pcoalabs <- as.list(c(glue::glue("PCoA 1 ({pe[1]}%)"),
+          glue::glue("PcoA 2 ({pe[2]}%)")))
+
+barplot(pcoa.bray$eig, names = paste ('PCoA', 1:137), las = 3, ylab = 'eigenvalues')
+
+pcoa.dat <- pcoa.bray$points %>%
+  as_tibble(rownames = "bay_year") %>%
+  left_join(site.info2) %>%
+  dplyr::select(c(bay_year, pcoa1, pcoa2, habitat, type))%>%
+  dplyr::rename(pcoa1end = pcoa1, pcoa2end = pcoa2)
+
+cent  <- aggregate(cbind(pcoa1end , pcoa2end) ~ habitat * type, data = pcoa.dat, FUN = mean) %>%
+  dplyr::rename(pcoa1 = pcoa1end, pcoa2 = pcoa2end)
+
+pcoa.dat2 <- pcoa.dat %>%
+  left_join(cent, by = c("habitat", "type"))
+
+# create species vectors w/ envfit
+pcoa.sp <- envfit(as.data.frame(pcoa.bray$points),
+                  std.traits[,1:13], perm = 999)
+pcoa.sp.dat <- data.frame(scores(pcoa.sp, display = "vectors"))
+pcoa.sp.dat$pvals <- pcoa.sp$vectors$pvals
+pcoa.sp.dat$sp_code <- row.names(pcoa.sp.dat)
+pcoa.sp.dat$r2 <- pcoa.sp$vectors$r2
+pcoa.sp.dat.sig <- filter(pcoa.sp.dat, pvals < 0.01)
+```
+
+PCOA with gear types and traits
+```{r}
+pcoa.points <- pcoa.bray$points %>%
+  as_tibble(rownames = "bay_year") %>%
+  left_join(site.info2)
+
+pcoa <- ggplot() +
+  geom_segment(data = pcoa.sp.dat.sig, aes(x = 0, xend = pcoa1, y = 0, yend = pcoa2),
+               inherit.aes=FALSE, linewidth = 1) +  # add arrows
+  geom_point(data = pcoa.points, 
+             mapping = aes(pcoa1, pcoa2,
+                       shape = habitat,
+                       fill = type),
+             size = 4) +
+  geom_point(data = cent, mapping = aes(pcoa1, pcoa2,
+                                        color = type,
+                                        shape = habitat),
+             size = 8, stroke = 2) +
+  geom_label_repel(data = pcoa.sp.dat.sig,
+                   aes(x = pcoa1, y = pcoa2, label = sp_code),
+                   size = 7, inherit.aes = FALSE,
+                   nudge_x = ifelse(pcoa.sp.dat.sig$pcoa1 >= 0.1, 0.1, -0.1),
+                   nudge_y = ifelse(pcoa.sp.dat.sig$pcoa2 >= -0.1, 0.1, -0.1),
+                   max.overlaps = getOption("ggrepel.max.overlaps", default = 17)) +
+  scale_shape_manual(name = "Habitat",
+                     labels = c("Eelgrass", "Understory kelp", "Mixed eelgrass"),
+                     values = c(21, 22, 23)) +
+  scale_fill_manual(name = "Gear type",
+                     labels = c("eDNA", "Beach seine"),
+                     values = c("#9c91ca", "#ac6162")) +
+  scale_color_manual(name = "Gear type",
+                     labels = c("eDNA", "Beach seine"),
+                     values = c("#9c91ca", "#ac6162")) +
+  labs(x = pcoalabs[[1]], y = pcoalabs[[2]]) +
+  plot_theme() +
+  theme(legend.key.width = unit(2, "cm"),
+        legend.text = element_text(size = 22),
+        legend.title = element_text(size = 24)) +
+  guides(fill = guide_legend(override.aes = list(shape = 21, size = 5)),
+         shape = guide_legend(override.aes = list(size = 5, fill = "black")))
+pcoa
+# 
+# ggsave(filename = "Images/wc_pcoa_edna-seine_bray_6-25-25.png", plot = pcoa,
+#       height = 8, width = 15)
+```
+
+
+# species accumulation curves (Fig S5)
+```{r}
+head(wide)
+df <- data.frame()
+#i <- "eelgrass_edna"
+# so we have to calculate the species accumulation based on each group - so we have to repeat it 6 times (or for loop? )
+for(i in unique(site.info2$intx)){
+  wide.sub <- wide %>%
+    rownames_to_column(var = "bay_year") %>%
+    left_join(site.info2, by = "bay_year") %>%
+    filter(intx == i) %>%
+    column_to_rownames(var = "bay_year") %>%
+    dplyr::select(-c(bay_year2:year))
+  
+  nonz <- as.data.frame(x = colSums(wide.sub) == 0) %>%
+    dplyr::rename(TF= "colSums(wide.sub) == 0") %>%
+    filter(TF == "FALSE") %>%
+    rownames_to_column(var = "sp")
+  
+  wide2 <- subset(wide.sub, select = c(nonz$sp))
+  # calc 
+  accum <- specaccum(wide2, method = "random")
+  
+  tmp <- data.frame(sites = accum$sites, richness = accum$richness,
+                    sd = accum$sd, intx = i)
+  
+  df <- rbind(df, tmp)
+
+}
+
+head(df)
+unique(df$intx)
+nrow(df)
+
+
+```
+
+plot the curves (Fig S5)
+```{r}
+sp.accum <- df %>%
+  separate(intx, into = c("habitat", "gear"), remove = F) %>%
+  mutate(habitat = fct_recode(habitat, "Eelgrass" = "eelgrass",
+                               "Understory kelp" = "kelp",
+                               "Mixed eelgrass" = "mixed"),
+         gear = fct_recode(gear, "eDNA" = "edna",
+                           "Beach seine" = "seine")) 
+
+#%>%
+  # mutate(habitat = ifelse(habitat == "eelgrass", "Eelgrass", 
+  #                         ifelse(habitat == "kelp", "Understory kelp",
+  #                                ifelse(habitat == "mixed", "Mixed eelgrass", habitat))))
+
+acc.hab.plot <- sp.accum %>%
+  #filter(habitat == "Eelgrass") %>%
+  ggplot() +
+  geom_ribbon(aes(ymin = richness - sd, ymax = richness + sd, x = sites,
+                  fill = intx, alpha = intx, alpha = intx)) +
+  geom_line(aes(x = sites, y = richness, linetype = intx), linewidth = 1.2) +
+  scale_fill_manual(name = "Gear & Habitat type",
+                     labels = c("Eelgrass eDNA", "Eelgrass seine",
+                                "Understory kelp eDNA","Understory kelp seine",
+                                "Mixed eelgrass eDNA", "Mixed eelgrass seine"),
+                     values = c("#327610", "#327610",
+                                "#E4572E", "#E4572E",
+                                "#E1AD01", "#E1AD01")) +
+  scale_alpha_manual(name = "Gear & Habitat type",
+                     labels = c("Eelgrass eDNA", "Eelgrass seine",
+                                "Understory kelp eDNA","Understory kelp seine",
+                                "Mixed eelgrass eDNA", "Mixed eelgrass seine"),
+                     values = c(0.3, 1,
+                                0.3, 1,
+                                0.3, 1)) +
+  # scale_fill_manual(name = "Habitat",
+  #                    labels = c("Eelgrass", "Understory kelp", "Mixed eelgrass"),
+  #                    values = c("#327610", "#E4572E", "#E1AD01")) +
+  scale_linetype_manual(name = "Gear & Habitat type",
+                     labels = c("Eelgrass eDNA", "Eelgrass seine",
+                                "Understory kelp eDNA", "Understory kelp seine",
+                                "Mixed eelgrass eDNA", "Mixed eelgrass seine"),
+                     values = c("solid", "dashed",
+                                "solid", "dashed",
+                                "solid", "dashed")) +
+  labs(x = "Number of Sites", y = "Species richness") +
+  plot_theme() +
+  theme(legend.key.size = unit(2, "line"),
+        strip.text = element_text(size = 22),
+        axis.title = element_text(size = 22)) +
+  #guides(linetype = guide_legend(override.aes = list(size = 1))) +
+  facet_wrap(~habitat)
+
+#ggsave("Images/species_accumulation_habitat.png", height = 7, width = 16)
+```
+
+
+# Indicator analysis
+## abundance based
+This is following a tutorial from a UW course https://uw.pressbooks.pub/appliedmultivariatestatistics/chapter/isa/ and talks about classical versus modified indicator analysis with the main difference being if the indicator species are for a single group (e.g. for habitat just eelgrass) or for a combination of groups (e.g. for habitat species A being an indicator for eelgrass and mixed eelgrass). 
+See blog for more information. 
+
+Uses library indicspecies::multipatt - which studies the **association** between species patterns and combinations of groups of sites
+
+Another source of information about indicator species is here chrome-extension://efaidnbmnnnibpcajpcglclefindmkaj/https://sites.ualberta.ca/~ahamann/teaching/renr690/seminars/Indicator.pdf and here:
+https://apsjournals.apsnet.org/doi/10.1094/PHYTO-12-19-0462-LE?url_ver=Z39.88-2003&rfr_id=ori:rid:crossref.org&rfr_dat=cr_pub%20%200pubmed
+
+Input is a species matrix
+```{r}
+set.seed(55)
+# make sure we have even breakdown of samples by site
+test2 <- site.info2 %>%
+  ungroup() %>%
+  distinct(bay_year2, habitat, type)
+table(test2$habitat, test2$type)
+
+library(indicspecies)
+head(wide) # non standardized
+head(site.info2)
+# okay from the abundance based permanvoa we know there's a significant interaction between habitat and gear type, so we want to include that complexity
+
+# Non standardized
+# note for restricting certain groups we have to understand that multipatt considers the groups as integers, so groups by themselves are first 1:n, and then combinations are listed after n. So for interaction; the first four groups are 1:4, 5+ arecombinations based on group1+2 = 5; group1+3 = 6 etc. 
+
+all.comb <- multipatt(wide, cluster = site.info2$intx, func = "IndVal.g")
+colnames(as.data.frame(all.comb$comb)) # use this to determine which sensicle combinations should be included. 
+
+# WHEN WE ADJUSTED SITE.INFO2 hab definitions we changed the order of the combinatios in the multipatt so we commented out the old one and double checked and made a new series of combos
+
+# indic <- multipatt(wide, cluster = site.info2$intx, func = "IndVal.g",
+#                    restcomb = c(1:8, 10, 13, 15, 16, 17, 20, 21, 27, 36)) # only including sensical
+#combinations
+indic <- multipatt(wide, cluster = site.info2$intx, func = "IndVal.g",
+                   restcomb = c(1:9, 12, 15, 17, 19:22, 41)) 
+
+summary(indic, alpha = 0.05, indvalcomp = TRUE)
+
+# created a nested column to add to combinations
+# nested <- data.frame(nested = c("eDNA", "Seine", "eDNA", "Seine", "eDNA", "Seine",
+#                       "Both gears", "eDNA", "eDNA", "Seine", "Seine", "Both gears",
+#                       "eDNA", "Seine", "Both gears", "eDNA", "Seine"))
+
+nested <- data.frame(nested = c("eDNA", "eDNA", "eDNA", "Seine", "Seine", "Seine",
+                      "eDNA", "eDNA","Both gears", "eDNA", "Both gears", "Both gears",
+                      "Seine","Seine", "Seine", "eDNA", "Seine"))
+
+comb.isa <- as.data.frame(indic$comb)
+combinations <- as.data.frame(colnames(comb.isa)) %>%
+  rownames_to_column(var = "index") %>%
+  mutate(index = as.integer(index)) %>%
+  cbind(nested) %>%
+  dplyr::rename(comb = "colnames(comb.isa)") # this has indexed the combinations that got included and are represented as indexes in inidic.sign below. 
+
+# one caveat about this (see help documentation) is that because we're using combinations (not the classical ISA) we need to account for type I error 
+library(data.table)
+indic.sign <- as.data.table(indic$sign, keep.rownames = TRUE)
+#add adjusted p-value
+indic.sign[ ,p.value.bh:=p.adjust(p.value, method="BH")]
+
+indic.sign.bh <- indic.sign[p.value.bh <=0.05] %>%
+  dplyr::select(c(rn, stat, index, p.value, p.value.bh)) %>%
+  arrange(index) %>%
+  left_join(combinations, by = "index") %>%
+  separate(comb,sep = "\\+", into = c("intx1", "intx2", "intx3"), remove = F) %>%
+  mutate(signif = "TRUE")
+
+unique(indic.sign.bh$comb)
+#write.csv(indic, "indicator_species_all.csv")
+```
+
+Next we want to create a figure that looks at seine data and plot what it looks like to have
+species proportion on the x axis and species abundance on the y axis 
+facet_wrap by hab
+
+## heatmap of indicator (Fig. 3)
+```{r}
+indic.sign.bh %>%
+  ggplot() +
+  geom_tile(aes(x = as.factor(index), y = rn, fill = stat, 
+                color = signif))
+
+indic.sign.bh %>%
+  distinct(index, comb) # not all index/comb have indicator species
+
+head(indic$str) # this is the statistic (indicator value sqrt(A*B))
+# this is for all combinations of species and gear/habitat combinations
+heatmapdat <- indic$str %>% 
+  as.data.frame() %>%
+  rownames_to_column(var = "rn") %>%
+  filter(rn %in% c(indic.sign.bh$rn)) %>%
+  pivot_longer(cols = c("eelgrass_edna":"eelgrass_seine+mixed_seine+kelp_seine"),
+               names_to = "comb", values_to = "stat") %>%
+  left_join(combinations) %>%
+  left_join(indic.sign.bh) %>%
+  mutate(signif = ifelse(is.na(signif), "FALSE", signif)) %>%
+  as.data.frame() %>%
+  # change xaxis lables to match a clearer definition of each combination
+  mutate(comb = ifelse(comb == "eelgrass_edna",
+                       "eDNA: eelgrass", 
+                ifelse(comb == "kelp_edna", "eDNA: kelp",
+                ifelse(comb == "mixed_edna", "eDNA: mixed",
+                ifelse(comb == "eelgrass_seine", "Seine: eelgrass",
+                ifelse(comb == "mixed_seine", "Seine: mixed", 
+                ifelse(comb == "kelp_seine","Seine: kelp",
+                ifelse(comb == "eelgrass_edna+kelp_edna",
+                       "eDNA: eelgrass & kelp",
+                ifelse(comb == "eelgrass_edna+mixed_edna",
+                        "eDNA: eelgrass & mixed",
+                ifelse(comb == "eelgrass_edna+eelgrass_seine",
+                                     "eDNA & seine: eelgrass",
+                ifelse(comb == "kelp_edna+mixed_edna", "eDNA: kelp & mixed",
+                       
+                ifelse(comb == "mixed_seine+kelp_seine",
+                       "Seine: kelp & mixed",
+                ifelse(comb == "eelgrass_seine+mixed_seine",
+                       "Seine: eelgrass & mixed", 
+                ifelse(comb == "eelgrass_edna+kelp_edna+mixed_edna",
+                       "eDNA: all habitats", 
+                ifelse(comb == "eelgrass_seine+mixed_seine+kelp_seine",
+                              "Seine: all habitats",
+                ifelse(comb == "eelgrass_seine+kelp_seine", "Seine: eelgrass & kelp",
+                ifelse(comb == "kelp_edna+kelp_seine", "eDNA & seine: kelp",
+                ifelse(comb == "mixed_edna", "eDNA: mixed",
+                ifelse(comb == "mixed_edna+mixed_seine", "eDNA & seine: mixed",
+                
+                       comb))))))))))))))))))) %>%
+  # reorder x axis to make more sense
+  mutate(comb = factor(comb, levels = c("eDNA: eelgrass", "eDNA: mixed", "eDNA: kelp",
+                                        "eDNA: eelgrass & kelp", "eDNA: eelgrass & mixed",
+                                        "eDNA: kelp & mixed", "eDNA: all habitats",
+                                        "eDNA & seine: eelgrass", "eDNA & seine: mixed",
+                                        "eDNA & seine: kelp", 
+                                        "Seine: eelgrass", "Seine: mixed", "Seine: kelp",
+                                        "Seine: eelgrass & kelp", "Seine: eelgrass & mixed",
+                                        "Seine: kelp & mixed", "Seine: all habitats")))
+
+isa.plot<- ggplot() +
+  geom_tile(data = heatmapdat,
+            aes(x = as.factor(comb), y = reorder(rn, -stat), fill = stat)) +
+  geom_tile(data = {heatmapdat %>% filter(signif == TRUE)},
+            aes(x = comb, y = reorder(rn, -stat)),
+            fill = NA, color = "red", linewidth = 1.5) +
+  #scale_color_manual(values = c("transparent", "red")) +
+  scale_fill_continuous(type = "viridis", limits = c(0, 1)) +
+  plot_theme() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(x = "Gear type & Habitat combinations",
+       y = "Species", fill = "Indicator Value") +
+  guides(color = "none",
+         fill = guide_colourbar(barheight = 10,
+                                barwidth = 1.5)) +
+  theme(strip.placement = "outside") +
+  facet_row("nested", strip.position = "top", scales = "free_x",
+             space = "free") +
+  theme(strip.background = element_rect(fill = "transparent", color = "gray"),
+        strip.text = element_text(size = 22),
+        axis.text.x = element_text(size = 20),
+        axis.text.y = element_text(size = 22, face = "italic"),
+        axis.title.x = element_text(size = 22),
+        axis.title.y = element_text(size = 22))
+isa.plot  
+
+
+# ggsave(plot = isa.plot, filename = "Images/updated_isa_plot_6-25-25.png", width = 16, height = 8)
+```
+
+
+## ISA sp in seine/eDNA w/ abund (Fig S6)
+```{r}
+head(seine.corrected2)
+head(dang.comb)
+head(heatmapdat)
+isa.sp <- filter(heatmapdat, nested == "Both gears" | nested == "Seine" |
+                   nested == "eDNA") %>%
+  distinct(rn)
+
+
+# create a few groups for each
+s.eel <- dang.comb %>%
+  filter(corrected_sp %in% isa.sp$rn,
+         type == "seine", 
+         habitat == "eelgrass") %>%
+  group_by(corrected_sp, habitat) %>%
+  dplyr::summarize(avg = mean(value)) %>%
+  mutate(comb = "Seine: eelgrass")
+
+s.kelp <- dang.comb %>%
+  filter(corrected_sp %in% isa.sp$rn,
+         type == "seine", 
+         habitat == "kelp") %>%
+  group_by(corrected_sp, habitat) %>%
+  dplyr::summarize(avg = mean(value)) %>%
+  mutate(comb = "Seine: kelp")
+
+s.mixed <- dang.comb %>%
+  filter(corrected_sp %in% isa.sp$rn,
+         type == "seine", 
+         habitat == "mixed") %>%
+  group_by(corrected_sp, habitat) %>%
+  dplyr::summarize(avg = mean(value)) %>%
+  mutate(comb = "Seine: mixed")
+
+s.eelkelp <- dang.comb %>%
+  filter(corrected_sp %in% isa.sp$rn,
+         type == "seine", 
+         habitat != ("mixed")) %>%
+  group_by(corrected_sp) %>%
+  dplyr::summarize(avg = mean(value)) %>%
+  mutate(comb = "Seine: eelgrass & kelp")
+
+s.eelmixed <- dang.comb %>%
+  filter(corrected_sp %in% isa.sp$rn,
+         type == "seine", 
+         habitat != "kelp") %>%
+  group_by(corrected_sp) %>%
+  dplyr::summarize(avg = mean(value)) %>%
+  mutate(comb = "Seine: eelgrass & mixed")
+
+s.kelpmixed <- dang.comb %>%
+  filter(corrected_sp %in% isa.sp$rn,
+         type == "seine", 
+         habitat != "eelgrass") %>%
+  group_by(corrected_sp) %>%
+  dplyr::summarize(avg = mean(value)) %>%
+  mutate(comb = "Seine: kelp & mixed")
+
+s.all <- dang.comb %>%
+  filter(corrected_sp %in% isa.sp$rn,
+         type == "seine") %>%
+  group_by(corrected_sp) %>%
+  dplyr::summarize(avg = mean(value)) %>%
+  mutate(comb = "Seine: all habitats")
+
+## Now repeat with eDNA, but we're going to average rather than sum relative abund
+
+e.eel <- dang.comb %>%
+  filter(corrected_sp %in% isa.sp$rn,
+         type == "edna", 
+         habitat == "eelgrass") %>%
+  group_by(corrected_sp, habitat) %>%
+  dplyr::summarize(avg = mean(value)) %>%
+  mutate(comb = "eDNA: eelgrass")
+
+e.kelp <- dang.comb %>%
+  filter(corrected_sp %in% isa.sp$rn,
+         type == "edna", 
+         habitat == "kelp") %>%
+  group_by(corrected_sp, habitat) %>%
+  dplyr::summarize(avg = mean(value)) %>%
+  mutate(comb = "eDNA: kelp")
+
+e.mixed <- dang.comb %>%
+  filter(corrected_sp %in% isa.sp$rn,
+         type == "edna", 
+         habitat == "mixed") %>%
+  group_by(corrected_sp, habitat) %>%
+  dplyr::summarize(avg = mean(value)) %>%
+  mutate(comb = "eDNA: mixed")
+
+e.eelkelp <- dang.comb %>%
+  filter(corrected_sp %in% isa.sp$rn,
+         type == "edna", 
+         habitat != ("mixed")) %>%
+  group_by(corrected_sp) %>%
+  dplyr::summarize(avg = mean(value)) %>%
+  mutate(comb = "eDNA: eelgrass & kelp")
+
+e.eelmixed <- dang.comb %>%
+  filter(corrected_sp %in% isa.sp$rn,
+         type == "edna", 
+         habitat != "kelp") %>%
+  group_by(corrected_sp) %>%
+  dplyr::summarize(avg = mean(value)) %>%
+  mutate(comb = "eDNA: eelgrass & mixed")
+
+e.kelpmixed <- dang.comb %>%
+  filter(corrected_sp %in% isa.sp$rn,
+         type == "edna", 
+         habitat != "eelgrass") %>%
+  group_by(corrected_sp) %>%
+  dplyr::summarize(avg = mean(value)) %>%
+  mutate(comb = "eDNA: kelp & mixed")
+
+e.all <- dang.comb %>%
+  filter(corrected_sp %in% isa.sp$rn,
+         type == "edna") %>%
+  group_by(corrected_sp) %>%
+  dplyr::summarize(avg = mean(value)) %>%
+  mutate(comb = "eDNA: all habitats")
+
+### JOIN together the seine data
+tmp.seine.dat <- rbind(s.eel, s.mixed, s.kelp, s.kelpmixed, s.eelmixed, s.all) %>%
+  dplyr::select(-habitat) 
+
+# seine data heat map
+abundheatdat <- expand_grid(isa.sp, unique(tmp.seine.dat$comb)) %>%
+  #subset(!(rn %in% tmp.seine.dat$corrected_sp)) %>%
+  dplyr::rename(corrected_sp = rn, comb = `unique(tmp.seine.dat$comb)`) %>%
+  left_join(tmp.seine.dat) %>%
+  mutate(sum = ifelse(is.na(avg), 0, avg)) %>%
+   mutate(comb = factor(comb,
+                        levels = c("Seine: eelgrass", "Seine: mixed", 
+                                   "Seine: kelp", "Seine: eelgrass & kelp", 
+                                   "Seine: eelgrass & mixed",
+                                   "Seine: kelp & mixed", "Seine: all habitats")),
+          corrected_sp = factor(corrected_sp, levels = c("Artedius spp.","Hexagrammos",
+                                                         "Clupea pallasii", "Lumpenus sagitta",
+                                                         "Syngnathus leptorhynchus", "Cottus_Leptocottus",
+                                                         "Anoplarchus", "Oligocottus maculosus",
+                                                         "Sebastes 1","Aulorhynchus flavidus", 
+                                                         "Hemilepidotus spp.", "Apodichthys flavidus",
+                                                         "Blepsias cirrhosus", "Ophiodon elongatus",
+                                                         "Brachyistius frenatus","Xiphister", "Oxylebius pictus")))
+
+relabundheatdat<- rbind(e.eel, e.mixed, e.kelp, e.kelpmixed, e.eelmixed, e.all) %>%
+   mutate(comb = factor(comb, 
+                        levels = c("eDNA: eelgrass", "eDNA: mixed", 
+                                   "eDNA: kelp", "eDNA: eelgrass & kelp", 
+                                   "eDNA: eelgrass & mixed",
+                                   "eDNA: kelp & mixed", "eDNA: all habitats")),
+          corrected_sp = factor(corrected_sp, levels = c("Artedius spp.","Hexagrammos",
+                                                         "Clupea pallasii", "Lumpenus sagitta",
+                                                         "Syngnathus leptorhynchus", "Cottus_Leptocottus",
+                                                         "Anoplarchus", "Oligocottus maculosus",
+                                                         "Sebastes 1","Aulorhynchus flavidus", 
+                                                         "Hemilepidotus spp.", "Apodichthys flavidus",
+                                                         "Blepsias cirrhosus", "Ophiodon elongatus",
+                                                         "Brachyistius frenatus","Xiphister", "Oxylebius pictus")))
+
+
+seine.plot <- ggplot() +
+   geom_tile(data = abundheatdat,
+            aes(x = as.factor(comb), y = corrected_sp, fill = log(avg))) +
+  scale_fill_continuous(type = "viridis") +
+  plot_theme() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 20),
+        axis.text.y = element_text(size = 20, face = "italic"),
+        legend.position = "top",
+        axis.title = element_text(size = 22)) +
+  labs(x = "Gear type & Habitat combinations",
+       y = "Species", fill = "Log(mean abundance)") +
+  guides(color = "none",
+         fill = guide_colourbar(barheight = 1.5,
+                                barwidth = 10,
+                                nrow = 1))
+
+edna.plot <- ggplot() +
+   geom_tile(data = relabundheatdat,
+            aes(x = as.factor(comb), y = corrected_sp, fill = log(avg))) +
+  viridis::scale_fill_viridis(option = "inferno") +
+  plot_theme() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 20),
+        axis.text.y = element_text(size = 20, face = "italic"),
+        legend.position = "top",
+        axis.title = element_text(size = 22)) +
+  labs(x = "Gear type & Habitat combinations",
+       y = "Species", fill = "Log(mean relative abundance)") +
+  guides(color = "none",
+         fill = guide_colourbar(
+                                barheight = 1.5,
+                                barwidth = 10,
+                                nrow = 1))
+
+raw.isa.plot <- edna.plot + seine.plot + 
+  plot_layout(axes = "collect") +
+  plot_annotation(tag_levels = "a")
+
+#ggsave("Images/Abund&RelAbund_ISAsp.png", width = 14, height = 8, plot = raw.isa.plot)
+```
+
+# Primer mismatch check
+
+Are any of the species that have primer mismatch bases really abundant in seines and absent in eDNA? 
+```{r}
+# this has absolute abundance for beach seines and relative abundance for eDNA
+# should only be used and interpreted with extreme caution. 
+head(dang.comb)
+
+# these are the species with the primer mismatch
+# agonopsis -northern spearnose poacher (solitary, demersal, plates), 
+# surf smelt (which we group to Hypomesus; obligatory schooling, pelagic scales), 
+# capelin (obligatory schooling, pelagic, scales), 
+# CO sole (solitary demersal scales), 
+# sturgeon poacher (solitary demersal plates)
+mismatch.sp <- c("Agonopsis vulsa", "Hypomesus", "Mallotus villosus", "Pleuronichthys coenosus", 
+                 "Podothecus accipenserinus")
+
+subset(dang.comb, corrected_sp %in% mismatch.sp) %>%
+  ungroup() %>%
+  ggplot() +
+  geom_col(aes(x = type, y = value, fill = bay_year2)) +
+  facet_wrap(~corrected_sp + type, scales = "free") +
+  theme(legend.position = "none") 
+
+dang.comb %>%
+  filter(corrected_sp %in% c("Mallotus villosus", "Podothecus accipenserinus"),
+         value > 0)
+
+# okay this isn't super helpful, but it does tell us that Agonopsis vulsa is only detected with eDNA and only at one site. 
+#' That Mallotus villosus is only detected with seine at approximately two sites
+#' That CO sole, Pleuronichthys coenosus is detected with both seine and eDNA
+#' Podothecus (sturgeon poacher) is detected with both; but only at one eDNA site, multiple seines
+#' Now lets try with both relative abundance
+
+head(std.wide) # relative abundance standardized with wisconsin double standardization
+std.wide %>%
+  dplyr::select(any_of(mismatch.sp)) %>%
+  rownames_to_column("bay_year") %>%
+  left_join(site.info2) %>%
+  pivot_longer(cols = c(`Agonopsis vulsa`, `Mallotus villosus`, `Pleuronichthys coenosus`,
+                        `Podothecus accipenserinus`, `Hypomesus`), values_to = "value", names_to = "corrected_sp") %>%
+  ggplot() +
+  geom_col(aes(x = type, y = value, fill = bay_year2)) +
+  facet_wrap(~corrected_sp, scales = "free")
+
+test <- std.wide %>%
+  dplyr::select(any_of(mismatch.sp)) %>%
+  rownames_to_column("bay_year") %>%
+  left_join(site.info2) %>%
+  pivot_longer(cols = c(`Agonopsis vulsa`, `Mallotus villosus`, `Pleuronichthys coenosus`,
+                        `Podothecus accipenserinus`, `Hypomesus`), values_to = "value", names_to = "corrected_sp") %>%
+  pivot_wider(names_from = type, values_from = value, values_fill = 0) %>%
+  group_by(corrected_sp) %>%
+  filter(seine > 0 )
+  
+```
+
+```{r}
+#' quick look at cottus leptocottus and if the abundance values jive with them being more associated with eelgrass than mixed or kelp
+
+head(seine.corrected2)
+n <- c(17, 7, 11)
+
+seine.corrected2 %>%
+  pivot_wider(id_cols = c(bay_year, bay_id, habitat), names_from = corrected_sp, 
+              values_from = abundance, values_fill = 0, values_fn = sum) %>%
+  dplyr::select(c(bay_year, bay_id, habitat, `Cottus_Leptocottus`)) %>%
+  pivot_longer(cols = `Cottus_Leptocottus`, values_to = "abund", names_to = "corrected_sp") %>%
+  group_by(habitat, corrected_sp) %>%
+  dplyr::summarize(avg = mean(abund),
+                   sd = sd(abund)) %>%
+  cbind(n) %>%  # n is 17 eelgrass sites, 7 kelp, 11 mixed
+  dplyr::rename(n = "...5") %>%
+  mutate(se = sd/sqrt(n)) %>%
+  ggplot() +
+  geom_col(aes(x = habitat, y = avg)) +
+  geom_errorbar(aes(x = habitat, ymin = avg - se, ymax = avg + se), width = 0.2) +
+  labs(x = "habitat", y = "avg +/- se")
+
+
+```
+

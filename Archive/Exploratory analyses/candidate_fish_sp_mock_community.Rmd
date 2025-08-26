@@ -1,0 +1,346 @@
+---
+title: "candidate_fish_sp_mock_community"
+author: "Lia Domke"
+date: "2/14/2024"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+read in fish seine data
+```{r}
+seine <- read.csv("../APECS_DM/Data/Fish_Seine/combined_seine_derived_2017-2022.csv")
+edna.sites <- read.csv("Data/nearshore_sites_2021_2022.csv") #list of sites that have either seine or edna or both samples
+```
+
+libraries
+```{r}
+library(tidyverse)
+```
+
+```{r theme settings}
+# Creates custom base plot theme that can adjust every graph that you use plot_theme for!
+
+plot_theme <- function() {
+  theme_bw(base_size = 20, base_family = "") %+replace%
+    theme(panel.background  = element_blank(),
+            plot.background = element_rect(fill="white", colour=NA), 
+            legend.background = element_rect(fill="white", colour=NA),
+            legend.key = element_rect(fill="transparent", colour=NA),
+            panel.grid.major = element_blank(), 
+            panel.grid.minor = element_blank(),
+            strip.background = element_rect(colour = "NA", fill = "gray96"))
+}
+
+# to use ggsave and export plots include argument 'device=cario_pdf' e.g.: 
+# ggsave("name.pdf", device=cairo_pdf, width = 6, height = 6)
+```
+
+Okay what we need to do: 
+- subset seine data by just the sites that have edna and seine
+- create graphs of numerable composition data
+
+```{r}
+edna.sites <- unite(edna.sites, bay_year, c(bay_id, year), remove = F) %>%
+  filter(!(bay_year == "_NA"))
+  
+edna.sites$seine <- trimws(edna.sites$seine, which = "both") # removes white spaces in columns
+edna.red <- dplyr::select(edna.sites, c(bay_year, seine, eDNA))
+
+seine.red <- seine %>%
+  unite(bay_id, c(bay_code:bay_sample)) %>%
+  unite(bay_year, c(bay_id, year), remove = F) %>%
+  subset(bay_year %in% edna.sites$bay_year) %>%
+  mutate(abundance = 1) %>%
+  left_join(edna.red, by = c("bay_year"), relationship = "many-to-many") %>%
+  filter(eDNA == "yes")
+
+site.info <- unique(seine.red[c("bay_id", "bay_year", "habitat", "latitude", "longitude", "place_name", "date", "julian", "year", "seine", "eDNA")]) %>%
+  arrange(year)
+
+table(site.info$year) # 16 sites in 2021 with seine and eDNA and 19 sites in 2021
+
+#write.csv(seine.red, "Data/seine_biomass_at_edna_sites.csv")
+```
+
+Lets create some graphs now with the 2021 and 2022 seine data
+
+```{r}
+head(seine.red)
+
+library(RColorBrewer)
+n <- 60
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+col_vector = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
+
+# lets do it by year
+seine.red %>%
+  filter(year == 2021) %>%
+  group_by(bay_id, year, habitat, sp_code, species_scientific, species_common) %>%
+  dplyr::summarise(total_abund_sp = sum(abundance),
+                   total_biom_sp = sum(mass_g)) %>%
+  distinct() %>%
+  group_by(bay_id, year, habitat) %>%
+  mutate(perc_abund = total_abund_sp/sum(total_abund_sp),
+         total_biom = total_biom_sp/sum(total_biom_sp)) %>%
+  ungroup() %>%
+  group_by(bay_id, year, habitat) %>%
+  mutate(totals = sum(perc_abund)) %>%
+  ggplot() +
+  geom_col(aes(x = bay_id, y = perc_abund, fill = species_common)) +
+  facet_grid(~habitat, scales = "free_x") +
+  scale_fill_manual(values = col_vector) +
+  labs(x = "Bay identification", y = "Abundance (%)", subtitle = "2021") +
+  plot_theme() +
+  theme(axis.text.x=element_text(angle = 45))
+
+seine.red %>%
+  filter(year == 2022) %>%
+  group_by(bay_id, year, habitat, sp_code, species_scientific, species_common) %>%
+  dplyr::summarise(total_abund_sp = sum(abundance),
+                   total_biom_sp = sum(mass_g)) %>%
+  distinct() %>%
+  group_by(bay_id, year, habitat) %>%
+  mutate(perc_abund = total_abund_sp/sum(total_abund_sp),
+         total_biom = total_biom_sp/sum(total_biom_sp)) %>%
+  ungroup() %>%
+  group_by(bay_id, year, habitat) %>%
+  mutate(totals = sum(perc_abund)) %>%
+  ggplot() +
+  geom_col(aes(x = bay_id, y = perc_abund, fill = species_common)) +
+  facet_grid(~habitat, scales = "free_x") +
+  scale_fill_manual(values = col_vector) +
+  labs(x = "Bay identification", y = "Abundance (%)", subtitle = "2022") +
+  plot_theme() +
+  theme(axis.text.x=element_text(angle = 45))
+```
+
+By biomass
+```{r}
+seine.red %>%
+  filter(year == 2021) %>%
+  group_by(bay_id, year, habitat, sp_code, species_scientific, species_common) %>%
+  dplyr::summarise(total_abund_sp = sum(abundance),
+                   total_biom_sp = sum(mass_g)) %>%
+  distinct() %>%
+  group_by(bay_id, year, habitat) %>%
+  mutate(perc_abund = total_abund_sp/sum(total_abund_sp),
+         perc_biom = total_biom_sp/sum(total_biom_sp)) %>%
+  ungroup() %>%
+  group_by(bay_id, year, habitat) %>%
+  mutate(totals = sum(perc_biom)) %>%
+  ggplot() +
+  geom_col(aes(x = bay_id, y = perc_biom, fill = species_common)) +
+  facet_grid(~habitat, scales = "free_x") +
+  scale_fill_manual(values = col_vector) +
+  labs(x = "Bay identification", y = "Biomass (%)", subtitle = "2021") +
+  plot_theme() +
+  theme(axis.text.x=element_text(angle = 45))
+
+seine.red %>%
+  filter(year == 2022) %>%
+  group_by(bay_id, year, habitat, sp_code, species_scientific, species_common) %>%
+  dplyr::summarise(total_abund_sp = sum(abundance),
+                   total_biom_sp = sum(mass_g)) %>%
+  distinct() %>%
+  group_by(bay_id, year, habitat) %>%
+  mutate(perc_abund = total_abund_sp/sum(total_abund_sp),
+         perc_biom = total_biom_sp/sum(total_biom_sp)) %>%
+  ungroup() %>%
+  group_by(bay_id, year, habitat) %>%
+  mutate(totals = sum(perc_biom)) %>%
+  ggplot() +
+  geom_col(aes(x = bay_id, y = perc_biom, fill = species_common)) +
+  facet_grid(~habitat, scales = "free_x") +
+  scale_fill_manual(values = col_vector) +
+  labs(x = "Bay identification", y = "Biomass (%)", subtitle = "2022") +
+  plot_theme() +
+  theme(axis.text.x=element_text(angle = 45))
+```
+
+Pull in the nfaa updated in 2019 to grab which species are in FMPs
+
+```{r}
+nfaa <- read.csv("Data/NFA_all_data_23_10_11.csv", skip = 4)
+head(nfaa)
+
+fmp.species <- nfaa %>%
+  filter(FMP == 1 | FMP_BSAI == 1 | FMP_GOA == 1 | FMP_Arctic == 1 | FMP_Salmon == 1) %>%
+  dplyr::select(SpCode, Sp_CommonName, Sp_ScientificName, FMP, FMP_BSAI, FMP_GOA, FMP_Arctic, FMP_Salmon) %>%
+  distinct()
+
+fmp.seine <- seine.red %>%
+  subset(sp_code %in% fmp.species$SpCode) 
+
+unique(fmp.seine[c("sp_code", "species_common", "species_scientific")]) # these are just spcies that have an fmp but there are also important fmp prey species too
+
+prey <- c("SANDLNCP", "GUNNCRE", "CAPELIN", "SANDFSHIP", "HERRING", "UNCOD", "PRICKSN", "STICK3", "CODTOM", "GUNNPEN", "UNSMELT", "EULACHON", "SMELTSUR", "PRICKBLK", "UNGUNN", "CODSAF", "SMELTRBW", "GUNNBAN", "SMELTPND", "PRICKBLL", "UNSTICK", "UNPRICKL", "UNLRVFOR", "PRICKLON", "PRICKROC", "ROCKSP", "UNROCK")
+
+prey.species <- unique(nfaa[c("SpCode", "Sp_CommonName", "Sp_ScientificName")]) %>%
+  anti_join(fmp.seine, by = c("SpCode" = "sp_code")) %>%
+  subset(SpCode %in% prey)
+
+prey.seine <- seine.red %>%
+  anti_join(fmp.seine) %>%
+  subset(sp_code %in% prey.species$SpCode)
+
+seine.fmp.prey <- rbind(prey.seine, fmp.seine)
+# fmp prey species should include pacific sand lance, pacific herring, rockfish (like copperquillback complex),
+# other fish in the forage fish complex: capelin, sandfishes, pricklebacks, cresent gunnels, 
+
+```
+
+
+
+```{r}
+seine.fmp.prey %>%
+  filter(year == 2021) %>%
+  group_by(bay_id, year, habitat, sp_code, species_scientific, species_common) %>%
+  dplyr::summarise(total_abund_sp = sum(abundance),
+                   total_biom_sp = sum(mass_g)) %>%
+  distinct() %>%
+  group_by(bay_id, year, habitat) %>%
+  mutate(perc_abund = total_abund_sp/sum(total_abund_sp),
+         perc_biom = total_biom_sp/sum(total_biom_sp)) %>%
+  ungroup() %>%
+  group_by(bay_id, year, habitat) %>%
+  mutate(totals = sum(perc_biom)) %>%
+  ggplot() +
+  geom_col(aes(x = bay_id, y = perc_biom, fill = species_common)) +
+  facet_grid(~habitat, scales = "free_x") +
+  scale_fill_manual(values = col_vector) +
+  labs(x = "Bay identification", y = "Biomass (%)", subtitle = "2021") +
+  plot_theme() +
+  theme(axis.text.x=element_text(angle = 45))
+
+seine.fmp.prey %>%
+  filter(year == 2022) %>%
+  group_by(bay_id, year, habitat, sp_code, species_scientific, species_common) %>%
+  dplyr::summarise(total_abund_sp = sum(abundance),
+                   total_biom_sp = sum(mass_g)) %>%
+  distinct() %>%
+  group_by(bay_id, year, habitat) %>%
+  mutate(perc_abund = total_abund_sp/sum(total_abund_sp),
+         perc_biom = total_biom_sp/sum(total_biom_sp)) %>%
+  ungroup() %>%
+  group_by(bay_id, year, habitat) %>%
+  mutate(totals = sum(perc_biom)) %>%
+  ggplot() +
+  geom_col(aes(x = bay_id, y = perc_biom, fill = species_common)) +
+  facet_grid(~habitat, scales = "free_x") +
+  scale_fill_manual(values = col_vector) +
+  labs(x = "Bay identification", y = "Biomass (%)", subtitle = "2022") +
+  plot_theme() +
+  theme(axis.text.x=element_text(angle = 45))
+```
+
+
+```{r}
+poa <- seine.red %>%
+  filter(species_common == "Tubenose poacher"| species_common == "Sturgeon poacher") #%>%
+  ggplot() +
+  geom_col(aes(x = bay_id, y = abundance, fill = species_common))
+  
+unique(poa$species_scientific)
+```
+
+
+Lets set up a couple mock communities to mimic waht we saw seining
+In 2022 - we sampled eelgrass and mixed community
+Eelgrass options: natzuhini A, north fish egg island A, 
+Mixed option: karheen, north saint phillips, ildefonso
+# Mimic mock community    
+```{r}
+# read in mock community candidate species
+mock <- read.csv("Data/nearshore_mock_community_spp_list.csv")
+
+# join it together by the scientific name
+glimpse(seine.red)
+# lets briefly rename copper/quillback complex species code
+seine.red <- seine.red %>%
+  mutate(sp_code = ifelse(species_common == "Copperquillback juvenile rockfish", "ROCKCQ", sp_code))
+# pull out species and species codes
+sp.names <- unique(seine.red[c("sp_code", "species_common", "species_scientific")])
+
+# rows that need to be added to the mock code species that include multiple species per g block
+add.sp <- data.frame(sp_code = c("POLLOCK", "CODPAC", "GREENMAS", "GREENKEL", "GREENROC", "ROCKQUI", "ROCKCQ", "UNROCK", "ROCKBLA"),
+           Common.name = c("Walleye pollock", "Pacific cod", "Masked greenling", "Kelp greenling", "Rock greenling", "Quillback rockfish", 
+                           "Copperquillback juvenile rockfish", "Juvenile rockfish", "Black rockfish"))
+
+
+mock.code <- mock %>%
+  left_join(sp.names, by = c("species" = "species_scientific")) %>%
+  mutate(sp_code = ifelse(Common.name == "Pacific rock sole", "SOLEROC", sp_code),
+         sp_code = ifelse(Common.name == "Yellowtail rockfish", "ROCKSP", sp_code)) %>% # we need to add a couple rows
+  full_join(add.sp)
+
+# now subset the full seine dataset 
+seine.mock <- subset(seine.red, sp_code %in% mock.code$sp_code)
+```
+
+Lets look at the species composition (abundance and biomass) for a subset of sites:
+```{r}
+perc <- seine.mock %>%
+  #filter(bay_id %in% c("KARH_A", "NSTP_A", "ILDE_A", "NATZ_A", "NFEI_A")) %>%
+  group_by(bay_id, year, habitat, sp_code, species_scientific, species_common) %>%
+  dplyr::summarise(total_abund_sp = sum(abundance),
+                   total_biom_sp = sum(mass_g)) %>%
+  distinct() %>%
+  group_by(bay_id, year, habitat) %>%
+  mutate(perc_abund = total_abund_sp/sum(total_abund_sp),
+         perc_biom = total_biom_sp/sum(total_biom_sp)) %>%
+  ungroup() %>%
+  group_by(bay_id, year, habitat) %>%
+  mutate(totals = sum(perc_biom)) #%>%
+  ggplot() +
+  geom_col(aes(x = bay_id, y = perc_biom, fill = species_common)) +
+  facet_grid(~habitat, scales = "free_x") +
+  scale_fill_manual(values = col_vector) +
+  labs(x = "Bay identification", y = "Biomass (%)") +
+  plot_theme() +
+  theme(axis.text.x=element_text(angle = 45))
+```
+
+
+
+```{r}
+prop.by.hab.mimic <- seine.mock %>%
+  filter(bay_id %in% c("SHIN_A", "HARM_A")) %>%
+  group_by(bay_id, year, habitat, sp_code, species_scientific, species_common) %>%
+  dplyr::summarise(total_abund_sp = sum(abundance),
+                   total_biom_sp = sum(mass_g)) %>%
+  distinct() %>%
+  group_by(bay_id, year, habitat) %>%
+  mutate(perc_abund = total_abund_sp/sum(total_abund_sp),
+         perc_biom = total_biom_sp/sum(total_biom_sp)) 
+
+#write.csv(prop.by.hab.mimic, "../Data/prop.by.hab.mimic.csv")
+#%>%
+  ungroup() %>%
+  group_by(bay_id, year, habitat) %>%
+  mutate(totals = sum(perc_biom)) %>%
+  ggplot() +
+  geom_col(aes(x = bay_id, y = perc_biom, fill = species_common)) +
+  #facet_grid(~habitat, scales = "free_x") +
+  scale_fill_manual(values = col_vector) +
+  labs(x = "Bay identification", y = "Biomass (%)") +
+  plot_theme() +
+  theme(axis.text.x=element_text(angle = 45))
+```
+
+Graph the approxiamte proportions from the mock communities
+
+```{r}
+mock.prop <- read.csv("Data/Nearshore_mock_community_prop.csv") %>%
+  dplyr::rename(common_name = "Common_name", community_name = "Community") %>%
+  dplyr::rename(community_no = "Community..")
+
+mock.prop %>%
+  ggplot() +
+  geom_col(aes(x = community_name, y = Perc_Community, fill = common_name)) +
+  scale_fill_manual(values = col_vector) +
+  plot_theme() +
+  labs(x = "Mock community", y = "Biomass (%)") +
+  theme(axis.text.x=element_text(angle = 45))
+```
+

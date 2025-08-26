@@ -1,0 +1,85 @@
+﻿Extraction_ID,SampleCode,Sample_label,Sample_rep,Sample_date,Extraction_date
+e00289,2021_SYLB_A_1,Sylburn harbor eel,1,6/8/21,11/18/21
+e00290,2021_SYLB_A_2,Sylburn harbor eel,2,6/8/21,11/18/21
+e00291,2021_SYLB_A_3,Sylburn harbor eel,3,6/8/21,11/18/21
+e00292,2021_SYLB_A_4,Sylburn harbor eel,control,6/8/21,11/18/21
+e00293,2021_SYLB_B_1,Sylburn harbor kelp,1,6/9/21,11/18/21
+e00294,2021_SYLB_B_2,Sylburn harbor kelp,2,6/9/21,11/18/21
+e00295,2021_SYLB_B_3,Sylburn harbor kelp,3,6/9/21,11/18/21
+e00296,2021_SYLB_B_4,Sylburn harbor kelp,control,6/9/21,11/18/21
+e00297,2021_REEF_A_1,Reef harbor eel,1,6/10/21,11/18/21
+e00298,2021_REEF_A_2,Reef harbor eel,2,6/10/21,11/18/21
+e00299,2021_REEF_A_3,Reef harbor eel,3,6/10/21,11/18/21
+e00300,2021_REEF_A_4,Reef harbor eel,control,6/10/21,11/18/21
+e00301,2021_REEF_B_1,Reef harbor kelp,1,6/13/21,11/18/21
+e00302,2021_REEF_B_2,Reef harbor kelp,2,6/13/21,11/18/21
+e00303,2021_REEF_B_3,Reef harbor kelp,3,6/13/21,11/18/21
+e00304,2021_REEF_B_4,Reef harbor kelp,control,6/13/21,11/18/21
+e00305,2021_KAHS_A_1,Kah shakes eel,1,6/11/21,11/18/21
+e00306,2021_KAHS_A_2,Kah shakes eel,2,6/11/21,11/18/21
+e00307,2021_KAHS_A_3,Kah shakes eel,3,6/11/21,11/18/21
+e00308,2021_KAHS_A_4,Kah shakes eel,control,6/11/21,11/18/21
+e00309,2021_KAHS_B_1,Kah shakes kelp,1,6/12/21,11/18/21
+e00310,2021_KAHS_B_2,Kah shakes kelp,2,6/12/21,11/18/21
+e00311,2021_KAHS_B_3,Kah shakes kelp,3,6/12/21,11/18/21
+e00312,Extraction blank,,,,11/18/21
+e00313,2021_KAHS_B_4,Kah shakes kelp,control,6/12/21,11/18/21
+e00314,2021_DALL_A_1,Dall bay eel,1,6/14/21,11/18/21
+e00315,2021_DALL_A_2,Dall bay eel,2,6/14/21,11/18/21
+e00316,2021_DALL_A_3,Dall bay eel,3,6/14/21,11/18/21
+e00317,2021_DALL_A_4,Dall bay eel,control,6/14/21,11/18/21
+e00318,2021_DALL_B_1,Dall bay kelp,1,6/15/21,11/18/21
+e00319,2021_DALL_B_2,Dall bay kelp,2,6/15/21,11/18/21
+e00320,2021_DALL_B_3,Dall bay kelp,3,6/15/21,11/18/21
+e00321,2021_DALL_B_4,Dall bay kelp,control,6/15/21,11/18/21
+e00322,2021_MOIR_A_1,Moira sound eel,1,6/22/21,11/18/21
+e00323,2021_MOIR_A_2,Moira sound eel,2,6/22/21,11/18/21
+e00324,2021_MOIR_A_3,Moira sound eel,3,6/22/21,11/18/21
+e00325,2021_MOIR_A_4,Moira sound eel,control,6/22/21,11/18/21
+e00326,2021_MOIR_B_1,Moira sound kelp,1,6/23/21,11/18/21
+e00327,2021_MOIR_B_2,Moira sound kelp,2,6/23/21,11/18/21
+e00328,2021_MOIR_B_3,Moira sound kelp,3,6/23/21,11/18/21
+e00329,2021_MOIR_B_4,Moira sound kelp,control,6/23/21,11/18/21
+e00330,2021_NICH_A_1,Nichols bay eel,1,6/26/21,11/18/21
+e00331,2021_NICH_A_2,Nichols bay eel,2,6/26/21,11/18/21
+e00332,2021_NICH_A_3,Nichols bay eel,3,6/26/21,11/18/21
+e00333,2021_NICH_A_4,Nichols bay eel,control,6/26/21,11/18/21
+e00334,2021_NICH_B_1,Nichols bay kelp,1,6/25/21,11/18/21
+e00335,2021_NICH_B_2,Nichols bay kelp,2,6/25/21,11/18/21
+e00336,Extraction blank,,,,11/18/21
+e00337,2021_NICH_B_3,Nichols bay kelp,3,6/25/21,11/22/21
+e00338,2021_NICH_B_4,Nichols bay kelp,control,6/25/21,11/22/21
+e00339,2021_TAHB_A_1,Tah bay eel,1,6/27/21,11/22/21
+e00340,2021_TAHB_A_2,Tah bay eel,2,6/27/21,11/22/21
+e00341,2021_TAHB_A_3,Tah bay eel,3,6/27/21,11/22/21
+e00342,2021_TAHB_A_4,Tah bay eel,control,6/27/21,11/22/21
+e00343,2021_HUNT_A_1,Hunter bay eel,1,6/28/21,11/22/21
+e00344,2021_HUNT_A_2,Hunter bay eel,2,6/28/21,11/22/21
+e00345,2021_HUNT_A_3,Hunter bay eel,3,6/28/21,11/22/21
+e00346,2021_HUNT_A_4,Hunter bay eel,control,6/28/21,11/22/21
+e00347,2021_KLWA_A_1,Klawock airport eel,1,8/6/21,11/22/21
+e00348,2021_KLWA_A_2,Klawock airport eel,2,8/6/21,11/22/21
+e00349,2021_KLWA_A_3,Klawock airport eel,3,8/6/21,11/22/21
+e00350,2021_KLWA_A_4,Klawock airport eel,control,8/6/21,11/22/21
+e00351,2021_BTRB_A_1,Big Tree bay eel,1,8/7/21,11/22/21
+e00352,2021_BTRB_A_2,Big Tree bay eel,2,8/7/21,11/22/21
+e00353,2021_BTRB_A_3,Big Tree bay eel,3,8/7/21,11/22/21
+e00354,2021_BTRB_A_4,Big Tree bay eel,control,8/7/21,11/22/21
+e00355,2021_CLAM_A_1,Clam island mixed,1,8/8/21,11/22/21
+e00356,2021_CLAM_A_2,Clam island mixed,2,8/8/21,11/22/21
+e00357,2021_CLAM_A_3,Clam island mixed,3,8/8/21,11/22/21
+e00358,2021_CLAM_A_4,Clam island mixed,control,8/8/21,11/22/21
+e00359,2021_NFEI_B_1,Cole island mixed,1,8/9/21,11/22/21
+e00360,Extraction blank,,,,11/22/21
+e00361,2021_NFEI_B_2,Cole island mixed,2,8/9/21,11/22/21
+e00362,2021_NFEI_B_3,Cole island mixed,3,8/9/21,11/22/21
+e00363,2021_NFEI_B_4,Cole island mixed,control,8/9/21,11/22/21
+e00364,2021_BOST_A_1,Bostwick inlet eel,1,8/12/21,11/22/21
+e00365,2021_BOST_A_2,Bostwick inlet eel,2,8/12/21,11/22/21
+e00366,2021_BOST_A_3,Bostwick inlet eel,3,8/12/21,11/22/21
+e00367,2021_BOST_A_4,Bostwick inlet eel,control,8/12/21,11/22/21
+e00368,2021_BOST_B_1,Bostwick inlet kelp,1,8/11/21,11/22/21
+e00369,2021_BOST_B_2,Bostwick inlet kelp,2,8/11/21,11/22/21
+e00370,2021_BOST_B_3,Bostwick inlet kelp,3,8/11/21,11/22/21
+e00371,2021_BOST_B_4,Bostwick inlet kelp,control,8/11/21,11/22/21
+e00372,Extraction blank,,,,11/22/21
