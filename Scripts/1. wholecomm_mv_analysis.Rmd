@@ -88,7 +88,8 @@ lhs <- read.csv("Data/NearshoreLHSCharacteristics.csv") %>% # clean up a couple 
                 "common" = Common.name,
                 "schooling" = Schooling.,
                 "water_hab" = Pelagic.Demersal,
-                "scale" = Scale.Type)
+                "scale" = Scale.Type) %>%
+  mutate(schooling = ifelse(schooling == "faculative schooling", "facultative schooling", schooling))
 
 anti_join(edna, seine, by = c("bay_year" = "bay_year")) %>%
   distinct(alternative_ID, bay_year, habitat, type) # so there are four sites that have eDNA and no seine data
@@ -674,8 +675,8 @@ pcoa <- ggplot() +
   guides(fill = guide_legend(override.aes = list(shape = 21, size = 5)),
          shape = guide_legend(override.aes = list(size = 5, fill = "black")))
 pcoa
-# 
-# ggsave(filename = "Images/wc_pcoa_edna-seine_bray_6-25-25.png", plot = pcoa,
+# # 
+# ggsave(filename = "Images/wc_pcoa_edna-seine_bray_9-4-25.png", plot = pcoa,
 #       height = 8, width = 15)
 ```
 

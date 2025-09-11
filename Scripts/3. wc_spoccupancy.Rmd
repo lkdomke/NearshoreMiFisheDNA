@@ -26,7 +26,7 @@ library(MCMCvis)
 Cleaned in a different script (sourced here)
 ```{r}
 #source("Scripts/spOccupancy_data_cleaning.R")
-source(file = "Scripts/mock community analysis/ppc_integratedMsPGOcc.R")
+source(file = "Scripts/ppc_integratedMsPGOcc.R")
 long <- read.csv("Data/spOccupancy_fishdat_long_5-14-25.csv")
 sites <- read.csv("Data/spOccupancy_fishdat_sites_5-14-25.csv")
 
@@ -36,6 +36,7 @@ lhs <- read.csv("Data/NearshoreLHSCharacteristics.csv") %>%
   mutate(Scientific.name = ifelse(Scientific.name == "Apodicthys flavidus",
                                   "Apodichthys flavidus", Scientific.name)) %>%
   mutate(Pelagic.Demersal = str_trim(Pelagic.Demersal, side = "right")) %>%
+  mutate(Schooling. = ifelse(Schooling. == "faculative schooling", "facultative schooling", Schooling.)) %>%
   dplyr::rename("name" = Scientific.name,
                 "common" = Common.name,
                 "schooling" = Schooling.,
@@ -43,7 +44,7 @@ lhs <- read.csv("Data/NearshoreLHSCharacteristics.csv") %>%
                 "scale" = Scale.Type) %>%
   mutate(schooling = str_replace_all(schooling, " ", "_"),
          scale = str_replace_all(scale, " ", "_")) %>%
-  arrange()
+  arrange() 
 ```
 
 # 1.1 Dectection-nondetection array
@@ -725,7 +726,7 @@ summary(post.seine$beta.samples)
 conv.edna <- plogis(post.edna$beta.samples)
 conv.seine <- plogis(post.seine$beta.samples)
 
-#png("Images/Trait_Detection_Params.png", height = 8, width = 10, units = "in", res = 400)
+# png("Images/Trait_Detection_Params_9-4-25.png", height = 8, width = 10, units = "in", res = 400)
 MCMCplot(object = post.edna$beta.samples, # enda
          object2 = post.seine$beta.samples, # seine
          ci = c(50, 95), 
@@ -736,7 +737,7 @@ MCMCplot(object = post.edna$beta.samples, # enda
          ref_ovl = T,
          labels = c("Intercept [Scales, Solitary, Demersal]", 
                     "Deciduous scales", "No scales", "Plates", "Some scales", 
-                    "Faculative schooling", "Obligatory schooling", "Both demersal/pelagic", "Pelagic"),
+                    "Facultative schooling", "Obligatory schooling", "Both demersal/pelagic", "Pelagic"),
          sz_labels = 1.2,
          sz_med = 2, sz_thick = 6, sz_thin = 3)
 legend(x = "topright", legend =c("eDNA", "Beach seines"),
