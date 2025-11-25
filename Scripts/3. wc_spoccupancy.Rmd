@@ -726,6 +726,8 @@ summary(post.seine$beta.samples)
 conv.edna <- plogis(post.edna$beta.samples)
 conv.seine <- plogis(post.seine$beta.samples)
 
+# note about MCMCplot - this defaults to plotting the median of the posterior samples
+# rather than the mean that we looked at above, see ?MCMCplot
 # png("Images/Trait_Detection_Params_9-4-25.png", height = 8, width = 10, units = "in", res = 400)
 MCMCplot(object = post.edna$beta.samples, # enda
          object2 = post.seine$beta.samples, # seine
