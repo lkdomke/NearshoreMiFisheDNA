@@ -763,7 +763,7 @@ acc.hab.plot <- sp.accum %>%
                      values = c("solid", "dashed",
                                 "solid", "dashed",
                                 "solid", "dashed")) +
-  labs(x = "Number of Sites", y = "Species richness") +
+  labs(x = "Number of Samples", y = "Species richness") +
   plot_theme() +
   theme(legend.key.size = unit(2, "line"),
         strip.text = element_text(size = 22),
@@ -771,7 +771,8 @@ acc.hab.plot <- sp.accum %>%
   #guides(linetype = guide_legend(override.aes = list(size = 1))) +
   facet_wrap(~habitat)
 
-#ggsave("Images/species_accumulation_habitat.png", height = 7, width = 16)
+# ggsave("Images/species_accumulation_habitat_020226_2.png", dpi = 900,
+#        height = 7, width = 16, plot = acc.hab.plot)
 ```
 
 
@@ -914,10 +915,16 @@ heatmapdat <- indic$str %>%
                                         "Seine: eelgrass & kelp", "Seine: eelgrass & mixed",
                                         "Seine: kelp & mixed", "Seine: all habitats")))
 
-isa.plot<- ggplot() +
-  geom_tile(data = heatmapdat,
+isa.plot <- 
+  heatmapdat %>%
+  mutate(rn = ifelse(rn == "Cottus_Leptocottus", "Cottus/Leptocottus", rn)) %>%
+  ggplot() +
+  geom_tile(#data = heatmapdat,
             aes(x = as.factor(comb), y = reorder(rn, -stat), fill = stat)) +
-  geom_tile(data = {heatmapdat %>% filter(signif == TRUE)},
+  geom_tile(inherit.aes = F, data = {heatmapdat %>% 
+      # this is hella messy but it prevents left join issues below
+      mutate(rn = ifelse(rn == "Cottus_Leptocottus", "Cottus/Leptocottus", rn)) %>%
+      filter(signif == TRUE)},
             aes(x = comb, y = reorder(rn, -stat)),
             fill = NA, color = "red", linewidth = 1.5) +
   #scale_color_manual(values = c("transparent", "red")) +
@@ -942,6 +949,7 @@ isa.plot
 
 
 # ggsave(plot = isa.plot, filename = "Images/updated_isa_plot_6-25-25.png", width = 16, height = 8)
+#ggsave(plot = isa.plot, filename = "Images/isa_fig3_1-29-26.png", width = 16, height = 8)
 ```
 
 
@@ -1077,6 +1085,7 @@ abundheatdat <- expand_grid(isa.sp, unique(tmp.seine.dat$comb)) %>%
   #subset(!(rn %in% tmp.seine.dat$corrected_sp)) %>%
   dplyr::rename(corrected_sp = rn, comb = `unique(tmp.seine.dat$comb)`) %>%
   left_join(tmp.seine.dat) %>%
+  mutate(corrected_sp = ifelse(corrected_sp == "Cottus_Leptocottus", "Cottus/Leptocottus", corrected_sp)) %>%
   mutate(sum = ifelse(is.na(avg), 0, avg)) %>%
    mutate(comb = factor(comb,
                         levels = c("Seine: eelgrass", "Seine: mixed", 
@@ -1085,7 +1094,7 @@ abundheatdat <- expand_grid(isa.sp, unique(tmp.seine.dat$comb)) %>%
                                    "Seine: kelp & mixed", "Seine: all habitats")),
           corrected_sp = factor(corrected_sp, levels = c("Artedius spp.","Hexagrammos",
                                                          "Clupea pallasii", "Lumpenus sagitta",
-                                                         "Syngnathus leptorhynchus", "Cottus_Leptocottus",
+                                                         "Syngnathus leptorhynchus", "Cottus/Leptocottus",
                                                          "Anoplarchus", "Oligocottus maculosus",
                                                          "Sebastes 1","Aulorhynchus flavidus", 
                                                          "Hemilepidotus spp.", "Apodichthys flavidus",
@@ -1093,14 +1102,15 @@ abundheatdat <- expand_grid(isa.sp, unique(tmp.seine.dat$comb)) %>%
                                                          "Brachyistius frenatus","Xiphister", "Oxylebius pictus")))
 
 relabundheatdat<- rbind(e.eel, e.mixed, e.kelp, e.kelpmixed, e.eelmixed, e.all) %>%
-   mutate(comb = factor(comb, 
+  mutate(corrected_sp = ifelse(corrected_sp == "Cottus_Leptocottus", "Cottus/Leptocottus", corrected_sp)) %>%
+  mutate(comb = factor(comb, 
                         levels = c("eDNA: eelgrass", "eDNA: mixed", 
                                    "eDNA: kelp", "eDNA: eelgrass & kelp", 
                                    "eDNA: eelgrass & mixed",
                                    "eDNA: kelp & mixed", "eDNA: all habitats")),
           corrected_sp = factor(corrected_sp, levels = c("Artedius spp.","Hexagrammos",
                                                          "Clupea pallasii", "Lumpenus sagitta",
-                                                         "Syngnathus leptorhynchus", "Cottus_Leptocottus",
+                                                         "Syngnathus leptorhynchus", "Cottus/Leptocottus",
                                                          "Anoplarchus", "Oligocottus maculosus",
                                                          "Sebastes 1","Aulorhynchus flavidus", 
                                                          "Hemilepidotus spp.", "Apodichthys flavidus",
@@ -1146,6 +1156,7 @@ raw.isa.plot <- edna.plot + seine.plot +
   plot_annotation(tag_levels = "a")
 
 #ggsave("Images/Abund&RelAbund_ISAsp.png", width = 14, height = 8, plot = raw.isa.plot)
+#ggsave("Images/Abund&RelAbund_ISAsp_1-29-26.png", width = 14, height = 8, plot = raw.isa.plot)
 ```
 
 # Primer mismatch check
