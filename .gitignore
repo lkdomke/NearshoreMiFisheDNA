@@ -6,3 +6,6 @@
 /Data/*output.rds
 /Data/*output*.rds
 .RDataTmp
+.RDataTmp1
+.RDataTmp2
+.RDataTmp3
