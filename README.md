@@ -4,6 +4,8 @@ Repository contains data analyses for manuscript accepted at CJFAS using data co
 This repo uses seine and environmental DNA data. eDNA data were generated from kjledger's [nearshore_eDNA repo](https://github.com/kjledger-NOAA/nearshore_eDNA)
 and then pulled into this repo for a combined analysis. 
 
+[![DOI](https://zenodo.org/badge/758160044.svg)](https://doi.org/10.5281/zenodo.19712008)
+
 ## Manuscript abstract
 Ecological studies aim to understand species distributions, yet the sampling methods affect which species are detected and may be influenced by species traits. Detection of marine fishes based on species traits have been studied using traditional sampling methods, but such studies have generally not extended to environmental DNA (eDNA). Here, we investigated which functional species traits (scale type, schooling behavior, and position-in-water-column) are detected by eDNA metabarcoding and beach seines in nearshore eelgrass, mixed eelgrass, and understory kelp habitats. Using data from 35 sites across southeast Alaska, we applied occupancy modeling to estimate detection of species traits by each method. Detection probability with eDNA was 27 times greater for the species with deciduous scales (*Clupea pallasii*) compared to species with non-deciduous scales, and lower for species with plates (rather than scales). Conversely, species with plates showed greater odds of detection with beach seines. Given the novelty of eDNA sampling, quantifying interactions between detection and functional traits will be important to accurately characterize species distributions across marine habitats. 
 
