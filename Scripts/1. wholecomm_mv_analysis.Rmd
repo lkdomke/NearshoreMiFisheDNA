@@ -28,7 +28,6 @@ This is a script adapted from the 'mv_edna_seine_exploration.rmd' that takes the
 
 - create nice indicator plots w/ abundance data included
 
-- 
 
 # library
 ```{r}
